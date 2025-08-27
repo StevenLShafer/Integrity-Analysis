@@ -184,33 +184,20 @@ server <- function(input, output, session) {
     Filename <- input$upload$datapath
     ext <- tools::file_ext(Filename)
 
-    # Switch statement started to fail parsing... ????
-    if (!ext %in% c("csv", "xlsx", "xls"))
-    {
+    if (ext == "csv") {
+      DATA <<- read.csv(Filename)
+      reactiveData(DATA)
+    } else if (ext == "xlsx") {
+      DATA <<- read.xlsx(Filename)
+      reactiveData(DATA)
+    } else if (ext == "xls") {
+      DATA <<- read.xl(Filename)
+      reactiveData(DATA)
+    } else {
       postMessage(
         paste0(".",ext,"is not a supported file type."
         )
       )
-      return()
-    }
-      
-    if (ext == "csv")
-    {
-      DATA <<- read.csv(Filename)
-      reactiveData(DATA)
-      return()
-    }
-    if (ext == "xlsx")
-    {
-      DATA <<- read.xlsx(Filename)
-      reactiveData(DATA)
-      return()
-    }
-    if (ext == "xls")
-    {
-      DATA <<- read.xl(Filename)
-      reactiveData(DATA)
-      return()
     }
   }
   )
