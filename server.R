@@ -498,7 +498,7 @@ server <- function(input, output, session) {
         # )
         # Sys.sleep(0.1)
         cat("Working on trial: ", TRIAL, "\n")
-        P_Calc(TRIAL)
+        shinycssloaders::showPageSpinner(P_Calc(TRIAL), caption = paste0(i, "/", LengthTrials))
         #loopTrials$invoke(TRIAL)
       }
       end_time <- Sys.time()
@@ -564,3 +564,4 @@ server <- function(input, output, session) {
 } 
 
      
+
