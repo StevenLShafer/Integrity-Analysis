@@ -558,8 +558,23 @@ server <- function(input, output, session) {
       ColumnNames <- names(DATA)
       
       # Validate Categories
+      #
+      # SE and ROUND_DISPERSION are recognised columns, not categories. Papers
+      # print a standard deviation or a standard error, never a variance, so
+      # ParsePDF records whichever was printed in its own column and leaves the
+      # conversion to us: it needs N, and the sample SD is a biased estimator
+      # of sigma (Jensen's inequality), which is what s.u() below corrects.
+      # ROUND_DISPERSION is the printed granularity of whichever value was
+      # given, and cannot be inferred from ROUND_MEAN - a table may print
+      # "39 (4.06)".
+      #
+      # They MUST be excluded here: is_category() calls any numeric column with
+      # an NA and integer values a category, and ROUND_DISPERSION is exactly
+      # that, so it would otherwise be analysed as a count column.
       CategoryNames <-
-        ColumnNames[!ColumnNames %in% c("TRIAL", "ROW", "MEAN","N", "SD", "ROUND_OBSERVATION", "ROUND_MEAN")]
+        ColumnNames[!ColumnNames %in% c("TRIAL", "ROW", "MEAN","N", "SD", "SE",
+                                        "ROUND_OBSERVATION", "ROUND_MEAN",
+                                        "ROUND_DISPERSION")]
       MiscNames <- NULL
       if (length(CategoryNames) == 0)
       {
@@ -626,6 +641,18 @@ server <- function(input, output, session) {
             }
             outputComments(paste("This appears to be a continuous variable. However, it has NA entries for required fields."))
             outputComments(paste("Specifically: ", message))
+            # A row carrying a standard error instead of a standard deviation
+            # is a different problem from a row that is simply blank, and the
+            # user can fix it - so say which it is rather than reporting a bare
+            # "SD = NA". The conversion is deliberately NOT done here: it needs
+            # N, and it is a decision about the analysis, not data entry.
+            if ("SE" %in% names(DATA) && !is.na(DATA$SE[i]) && is.na(DATA$SD[i]))
+              outputComments(paste0(
+                "Line ", i + 1, " reports a standard error (SE = ", DATA$SE[i],
+                "), not a standard deviation. The analysis needs an SD. ",
+                "Enter the SD, or convert the SE yourself - the conversion ",
+                "needs N and is a decision about the analysis, so it is not ",
+                "made for you."))
             FAIL <- TRUE
           } else {
             # Fix MEAN digits if Mean has any decimal digits
@@ -652,7 +679,11 @@ server <- function(input, output, session) {
         outputComments("There are one or more errors in the data table. Please review the above messages to address these.")
         return()
       }
-      DATA <- DATA[,c("TRIAL", "ROW", "N", "MEAN", "SD",  "ROUND_MEAN", "ROUND_OBSERVATION", CategoryNames, MiscNames)]
+      # Carry SE and ROUND_DISPERSION through when the input supplies them.
+      # They are optional: a spreadsheet typed by hand, or written before this
+      # change, has neither, and must still work.
+      OptionalColumns <- intersect(c("SE", "ROUND_DISPERSION"), names(DATA))
+      DATA <- DATA[,c("TRIAL", "ROW", "N", "MEAN", "SD",  "ROUND_MEAN", "ROUND_OBSERVATION", OptionalColumns, CategoryNames, MiscNames)]
       DATA <- DATA[order(DATA$TRIAL, DATA$ROW),]
       TRIALS <- unique(DATA$TRIAL)
       
