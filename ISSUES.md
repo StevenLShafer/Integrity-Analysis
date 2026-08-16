@@ -32,12 +32,33 @@ code-review session, so that one new session can pick up both threads.
 - OCR for scanned articles; 83 of 99 scanned EJA papers had their PMIDs
   recovered from the printed citation line, with no network call.
 
-**In flight when this was written:** a blind verification pass — the model
-re-reads the same table independently, and the two extractions are compared —
-over 905 trials, about $45. A pilot on 43 trials confirmed **86% of our values
-with exactly one contradiction in 505 rows**; the disagreements are about which
-rows belong, not about the numbers. The same pass harvests arm N, missing from
-4,013 rows.
+**Deliverables on disk, `C:/temp/ParsePDF_output/`:**
+
+| File | What it is |
+|---|---|
+| `ParsePDF_IntegrityAnalysis.xlsx` | the corpus — 12,500 continuous rows, 905 trials, TRIAL = PMID, current SD/SE schema |
+| `ParsePDF_verified.xlsx` | same data plus per-row verification tags (only 45 trials verified — see below) |
+| `ParsePDF_needs_AI_fallback.csv` | tiered list of what the AI could rescue, with costs |
+| `ParsePDF_for_review.csv` | rows where the two reads disagree |
+| `ParsePDF_discrepancies_for_review.csv` | 171 diagnostic disagreements with Carlisle, for adjudication |
+| `success_by_year.png`, `ParsePDF_success_by_year.csv` | year/journal regression |
+
+**The blind verification pass FAILED and needs redoing.** The design is sound
+and the pilot worked — 43 trials, **86% of our values confirmed with exactly one
+contradiction in 505 rows**, the disagreements being about which rows belong
+rather than about the numbers. But the full run over 905 trials was launched as
+**four concurrent shards**, and 811 of 861 calls timed out — almost certainly
+API rate limiting, with retries then exceeding the 300-second per-call timeout.
+Timed-out calls largely do not consume tokens, so the spend should be well under
+the $45 estimated; worth confirming in the Anthropic Console.
+
+To redo it: run **sequentially, or at most two shards**, with a longer per-call
+timeout. The scripts are in the session scratchpad
+(`verifyrun.R`, `verifyworker.R`, `mergeverify.R`) and the runner skips files
+that already exist, so a re-run resumes rather than repeating. The same pass
+also harvests arm N, missing from 4,013 rows — the merge fills it **only where
+the two reads agree on ≥80% of a trial's values**, since agreement is the
+evidence that both engines read the same table.
 
 **A collision worth learning from.** This session committed to a local
 `fix-r-code-errors` branch without pushing; the review session then merged the
