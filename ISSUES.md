@@ -359,6 +359,29 @@ side is known-good before the parsing side lands on top of it.
 
 ---
 
+## 10. Restructure the repository as an R package (stanpumpR model)
+
+Steve's request (2026-08-16): organize IntegrityAnalysis as a proper package
+repository, using stanpumpR as the example. Full plan, reviewed against the
+actual stanpumpR and ParsePDF layouts, in
+[`docs/package-restructure-plan.md`](docs/package-restructure-plan.md).
+
+In one line per phase: (1) scaffolding — `DESCRIPTION`, `R/app_*.R`,
+`inst/www`, one-line `app.R`, no behavior change; (2) extract `P_Calc()`,
+`sumz()`, validation into documented one-per-file functions; (3) testthat
+suite in-repo (subsumes issue 4's home); (4) ParsePDF fold-in (issue 9)
+lands as package files + tests; (5) GitHub Actions — `R CMD check` on every
+push, then stanpumpR's deploy trio, after which production deploys ship only
+`app.R` and the hand-maintained `appFiles` list (and its
+never-upload-the-Carlisle-data hazard) disappears.
+
+Sequencing: phase 1 any time; phase 2 only after issue 3's validation is
+green, so the refactor has a correctness baseline. renv is deliberately
+deferred (see the plan). License file to be chosen (MIT assumed, matching
+stanpumpR — confirm).
+
+---
+
 ## Closed
 
 *(nothing yet)*
