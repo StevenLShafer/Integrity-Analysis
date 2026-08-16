@@ -12,7 +12,7 @@ headers); everything else was done and verified in the code-review session.
 All work is **merged to `main` and deployed to production**. There is no
 open branch from this thread.
 
-- **PR #4** (https://github.com/StevenLShafer/Integrity-Analysis/pull/4),
+- **PR #4** (https://github.com/StevenLShafer/IntegrityAnalysis/pull/4),
   merged as `9fc20f8`: full bug-fix pass over `global.R` / `server.R`.
   Every fix carries an in-place `FIX:` comment with rationale. Highlights:
   - Crashes: nonexistent `read.xl()` (.xls uploads), fatal `with()` call
@@ -73,7 +73,7 @@ variables mutated by `<<-` must be read through `session$env$...`; and
 
   ```r
   rsconnect::deployApp(
-    appDir  = "C:/dev/Integrity-Analysis",
+    appDir  = "C:/dev/IntegrityAnalysis",
     appName = "IntegrityAnalysis",           # or IntegrityAnalysis_PR_<n> for a PR test
     appFiles = c("global.R","server.R","ui.R",
                  "www/Table.png","www/app.js","www/app.css",
@@ -84,15 +84,15 @@ variables mutated by `<<-` must be read through `session$env$...`; and
 
   **Always pass `appFiles` explicitly**: the working tree contains
   Carlisle data spreadsheets and other files that must not be uploaded.
-  PR test deployments follow the stanpumpR convention
+  PR test deployments follow the convention
   `IntegrityAnalysis_PR_<PR number>`; after merging, remove them with
   `rsconnect::terminateApp()` then `rsconnect::purgeApp()`.
 - **Hazards found the hard way**:
-  - Running `Rscript` while the shell's working directory is
-    `C:\dev\stanpumpR` activates **stanpumpR's renv** — packages install
-    into (and pollute) that project's library. One spill was reverted
-    with `renv::restore(clean = TRUE)`. Set the working directory to this
-    repo before any R call.
+  - Running `Rscript` while the shell's working directory is another,
+    renv-managed project activates **that project's renv** — packages
+    install into (and pollute) that project's library. One spill was
+    reverted with `renv::restore(clean = TRUE)`. Set the working
+    directory to this repo before any R call.
   - In PowerShell double-quoted `-e` strings, `$p` etc. are interpolated
     away by PowerShell before R sees them. Write R code to a temp file
     and `Rscript file.R` instead.

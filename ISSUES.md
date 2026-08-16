@@ -1,4 +1,4 @@
-# Integrity-Analysis — open issues
+# IntegrityAnalysis — open issues
 
 Working list of outstanding work, newest thinking first. Each entry says what
 the work is, why it matters, and what "done" looks like. Closed items move to
@@ -324,7 +324,7 @@ writes.
 ## 9. Fold ParsePDF into this repository
 
 ParsePDF (`C:/dev/ParsePDF`, private) is a temporary home for the PDF parsing
-work. It will be merged directly into Integrity-Analysis rather than kept as a
+work. It will be merged directly into IntegrityAnalysis rather than kept as a
 dependency.
 
 **What comes across**

@@ -11,7 +11,8 @@ its "Where things stand" section before starting substantive work.
 A Shiny app implementing the Carlisle–Shafer Monte Carlo analysis of
 baseline data in randomized controlled trials, used in Steve Shafer's work
 as a journal editor detecting research fraud (references in README.md).
-This is a **separate project from stanpumpR**. Three flat files: `global.R`
+This is a **standalone project, unrelated to any other repository on this
+machine**. Three flat files: `global.R`
 (libraries, constants, `sumz()`, `outputComments()`), `ui.R`
 (shinydashboard page), `server.R` (validation pipeline + `P_Calc()` Monte
 Carlo). Not a package: no renv, no Collate, no tests yet (ISSUES.md
@@ -30,8 +31,8 @@ Stouffer's `sumz()`.
 
 - Use **R 4.5.3**: `"C:\Program Files\R\R-4.5.3\bin\Rscript.exe"` (its 4.5
   user library has all packages; the 4.6 library does not).
-- Do not start R while the shell is in another project's directory —
-  stanpumpR's renv will hijack the library path.
+- Do not start R while the shell is in another project's directory — an
+  renv-managed project there will hijack the library path.
 - Deploy with the exact `deployApp()` call in
   [`handoff/2026-08-16-merged-handoff.md`](handoff/2026-08-16-merged-handoff.md)
   — **always with the explicit `appFiles` list**, because the working tree
