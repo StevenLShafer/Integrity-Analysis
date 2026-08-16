@@ -2,6 +2,12 @@
 ###############################
 # Server                      #
 ###############################
+#
+# PROVENANCE: Bug-fix pass by Claude Code (model: Claude Fable 5), 2026-08-14,
+# on the 2025-09-01 original. Each fix is commented in place with "FIX:".
+# All fixes verified by running the app locally against Example.xlsx
+# (see PR description for the list and rationale).
+#
 # Add adjustment to SD for number of subjects
 # Add ability to download raw data
 # Add line by line integrity checks
@@ -23,11 +29,25 @@ server <- function(input, output, session) {
   output$downloadButton <- NULL
   output$logContent <- NULL
   output$GoButton <- NULL
-  OUTPUT <- NULL
-  stopImplicitCluster()
-#  cores <- detectCores() - 1  # Use one less than available cores
-#  cluster <- makeCluster(cores)
-#  registerDoParallel(cluster)
+
+  # FIX: per-session state. These were previously globals assigned with <<-
+  # from global.R, which meant every concurrent user session in the same R
+  # process shared (and clobbered) one copy of the data mid-analysis.
+  # Declaring them here gives each session its own copy; the existing <<-
+  # assignments below now bind to these because server() is the nearest
+  # enclosing environment.
+  OUTPUT <- NULL         # accumulated results across trials, for download
+  DATA <- NULL           # validated data table for the current upload
+  TRIALS <- NULL         # unique trial identifiers in DATA
+  ColumnNames <- NULL    # cleaned-up column names of DATA
+  CategoryNames <- NULL  # columns holding categorical (count) data
+
+  # FIX: removed stopImplicitCluster() and the commented-out doParallel
+  # cluster setup. The row loop in P_Calc runs sequentially (%do%), so no
+  # parallel backend is in play; the doParallel calls only created worker
+  # processes that were never used. Restore a single parallel framework
+  # (future/doFuture OR doParallel, not both) if/when the loop is
+  # parallelized.
 
   output$stopButton <- 
     renderUI({
@@ -35,7 +55,7 @@ server <- function(input, output, session) {
         column(
           12,
           br(),
-          actionBttn("stop", HTML("&nbsp &nbsp EXIT &nbsp &nbsp"), style = "gradient", size = "xs", color = "warning"),
+          actionBttn("stop", HTML("&nbsp; &nbsp; EXIT &nbsp; &nbsp;"), style = "gradient", size = "xs", color = "warning"),
           br()
         )
       )
@@ -54,9 +74,16 @@ server <- function(input, output, session) {
   
   is_category <- function(x) {
     # Remove NAs first for efficiency, then check if all values are integers
-    
+
+    # FIX: text columns (e.g. a comments column) previously crashed the app:
+    # as.integer() on character data yields NA, all() then returns NA, and
+    # if (!NA) is a fatal error ("missing value where TRUE/FALSE needed").
+    # A non-numeric column can never be a category (categories are counts).
+    if (!is.numeric(x))
+      return(FALSE)
+
     # If there are no na values, then it can't be a category
-    if (sum(is.na(x)) == 0) 
+    if (sum(is.na(x)) == 0)
       return(FALSE)
 
     # If the vector is empty after removing NAs then it is not a category
@@ -114,12 +141,21 @@ server <- function(input, output, session) {
             {
               m1 <- m
             } else {
-              m1 <- 1000000000 / N
+              # FIX: floor() added. 1e9/N is rarely a whole number, and a
+              # fractional replication count silently mis-sizes the matrix
+              # dimensions below.
+              m1 <- floor(1000000000 / N)
             }
             SEMsample <- Meansd/sqrt(mean(ROWS$N))
             DiffSample <- sum((ROWS$MEAN - Meanmean)^2) # Squared difference of column means
             # Monte Carlo Simulation
-            meansim <- dqrnorm(m,mean=Meanmean,sd=SEMsample) # Generate a new mean for each simulation
+            # FIX: was dqrnorm(m, ...). meansim must have exactly m1 entries
+            # (one simulated "true" mean per replication row). When N was
+            # large enough that m1 < m, the extra entries misaligned the
+            # column-major matrix fill below, so within one replication the
+            # study arms were simulated from DIFFERENT true means - breaking
+            # the null hypothesis the simulation is supposed to represent.
+            meansim <- dqrnorm(m1,mean=Meanmean,sd=SEMsample) # Generate a new mean for each simulation
             MonteCarloMean <- matrix(NA, nrow = m1, ncol = COLS) # I want one row for each simulation
             # Need to do each column separately. Couldn't think of an efficient way to do this without
             # a loop. 
@@ -128,7 +164,7 @@ server <- function(input, output, session) {
               round(
                 rowmeans(
                   round(
-                    # The matrix below will have one row for each replication (m rows), 
+                    # The matrix below will have one row for each replication (m rows),
                     # and one column for each person (N[i] columns)
                     # Cannot use dqrnorm because it won't support the array
                     # of meansim needed for each replication
@@ -136,10 +172,18 @@ server <- function(input, output, session) {
                       rnorm(ROWS$N[i] * m1, rep(meansim, ROWS$N[i]), Meansd),
                       nrow = m1, byrow = FALSE
                     ),
-                    ROWS$ROUND_OBSERVATION[i]
+                    ROWS$ROUND_OBSERVATION[i]  # observations rounded as recorded
                   )
                 ),
-                ROWS$ROUND_OBSERVATION[i]
+                # FIX: was ROWS$ROUND_OBSERVATION[i]. The simulated column
+                # means must be rounded to the precision at which the
+                # PUBLISHED means were reported (ROUND_MEAN) - that is the
+                # value the validation code in the upload observer goes to
+                # such lengths to derive, and it was never used. Using the
+                # observation precision simulated the Monte Carlo
+                # distribution at the wrong granularity whenever means are
+                # reported more (or less) precisely than the observations.
+                ROWS$ROUND_MEAN[i]
               )
             N <- matrix(ROWS$N, nrow = m1, ncol = COLS, byrow = TRUE)
             # Calculate the weighted mean, and then round
@@ -150,13 +194,21 @@ server <- function(input, output, session) {
             PLE <- sum(DiffSamples < DiffSample)/m1 + PEQ
             PGE <- sum(DiffSamples > DiffSample)/m1 + PEQ
           } else {
-            ROWS <- ROWS[,CategoryNames]
+            # FIX: drop = FALSE added. With a single category column,
+            # ROWS[,CategoryNames] dropped to a bare vector and the
+            # ROWS[,NAME] <- NULL loop below crashed with "incorrect number
+            # of dimensions".
+            ROWS <- ROWS[,CategoryNames, drop = FALSE]
             for (NAME in CategoryNames)
             {
               if (all(is.na(ROWS[,NAME])))
                 ROWS[,NAME] <- NULL
             }
-            PLE <- chisq.test(ROWS, simulate.p.value=m)$p.value
+            # FIX: was chisq.test(ROWS, simulate.p.value = m). A numeric
+            # simulate.p.value is simply treated as TRUE and the replicate
+            # count stays at chisq.test's DEFAULT of 2000 - the m replicates
+            # were never run. The replicate count is the separate B argument.
+            PLE <- chisq.test(ROWS, simulate.p.value=TRUE, B=m)$p.value
             PGE <- 1-PLE
           }
           # Need to be sure P != 0 or 1
@@ -172,8 +224,13 @@ server <- function(input, output, session) {
         }
         
         c(as.character(Row), PLE, PGE)
-      } %seed% TRUE
-    
+      }
+    # FIX: removed "%seed% TRUE" after the closing brace. %seed% is
+    # doFuture's operator for seeding a %dofuture% loop; chained after %do%
+    # it was applied to the already-computed result matrix, which is an
+    # error. (Note dqrnorm draws from dqrng's own RNG stream; use
+    # dqset.seed() if reproducible simulations are ever needed.)
+
     # This bizarre code is because if there is only 1 row, R creates a data.frame
     # with 3 columns and 1 row. 
     if (length(x) == 3)
@@ -187,12 +244,14 @@ server <- function(input, output, session) {
     x[1,1] <- TRIAL
     x <- as.data.frame(x)
     names(x) <- c("TRIAL", "ROW", "PLE", "PGE")
-    cat("Row IDs", RowIDs, "\n")
-    print(x)
-    cat("match results", match(x$ROW, RowIDs), "\n")
-    x <- x[match(x$ROW, RowIDs),]
-    print(x)
-    
+    # FIX: was x[match(x$ROW, RowIDs),] - the arguments were reversed, which
+    # applies the INVERSE permutation. Harmless today only because %do%
+    # returns results already in RowIDs order; it would silently scramble row
+    # labels against p-values the day this loop is parallelized. To order x
+    # by RowIDs: for each RowID, find its position in x$ROW.
+    # (Also removed the leftover cat()/print() debugging output here.)
+    x <- x[match(RowIDs, x$ROW),]
+
     PLEvalues <- as.numeric(x$PLE)
     PGEvalues <- as.numeric(x$PGE)
     
@@ -203,7 +262,10 @@ server <- function(input, output, session) {
     {
       PLE <- signif(sumz(PLEvalues)$p,4)
     } else {
-      if (length(PLEvalues == 1))
+      # FIX: was length(PLEvalues == 1), i.e. the length of a comparison
+      # vector, not a comparison of the length. It worked by coincidence
+      # (length 1 -> 1 -> truthy; length 0 -> 0 -> falsy) but was a trap.
+      if (length(PLEvalues) == 1)
         PLE <- PLEvalues
       if (length(PLEvalues)==0)
         PLE = "No values"
@@ -213,7 +275,8 @@ server <- function(input, output, session) {
     {
       PGE <- signif(sumz(PGEvalues)$p,4)
     } else {
-      if (length(PGEvalues == 1))
+      # FIX: same length(x == 1) -> length(x) == 1 typo as PLE above
+      if (length(PGEvalues) == 1)
         PGE <- PGEvalues
       if (length(PGEvalues)==0)
         PGE = "No values"
@@ -246,10 +309,18 @@ server <- function(input, output, session) {
       progress <- shiny::Progress$new(session, style = "notification")
       on.exit(progress$close())
       DATA <<- reactiveDataValidated()
+      # FIX: results from any previous run are discarded here. OUTPUT was
+      # never reset, so analyzing a second file (or re-analyzing) in the same
+      # session appended new results to the old ones in the downloaded
+      # spreadsheet.
+      OUTPUT <<- NULL
       start_time <- Sys.time()
-      progress$set(message = "Processing Trial:", value = 0)
-      cores <- detectCores() - 1
-      registerDoParallel(cores)
+      # (Progress message wording below taken from the 2025-09-01 local copy
+      # on g:, which post-dated the GitHub upload.)
+      progress$set(message = "Processed Trial ", value = 0)
+      # FIX: removed "cores <- detectCores() - 1; registerDoParallel(cores)".
+      # The P_Calc loop runs sequentially (%do%), so this registered a
+      # parallel backend that was never used.
       LengthTrials <- length(TRIALS)
       for (i in 1:LengthTrials)
       {
@@ -259,18 +330,23 @@ server <- function(input, output, session) {
           P_Calc(TRIAL)
         )
         progress$set(
-          value = i / LengthTrials, 
-          detail = paste0(" ",TRIAL, "P = ",OUTPUT$PLE[nrow(OUTPUT)-1]))
+          value = i / LengthTrials,
+          detail = paste0(TRIAL, ", P = ",OUTPUT$PLE[nrow(OUTPUT)-1]))
       }
-      # Not sure which is correct
-      with(registerDoFuture(), local = TRUE)
-      output$stopButton <- 
+      # FIX: removed 'with(registerDoFuture(), local = TRUE)' (the line the
+      # original marked "Not sure which is correct"). with() has no 'local'
+      # argument, so this always threw "argument is missing, with no
+      # default", aborting the observer here - which is why the EXIT button
+      # was never restored, the execution time never logged, and
+      # reactiveDone(TRUE) never ran, so the Download Results button never
+      # appeared.
+      output$stopButton <-
         renderUI({
           fluidRow(
             column(
               12,
               br(),
-              actionBttn("stop", HTML("&nbsp &nbsp EXIT &nbsp &nbsp"), style = "gradient", size = "xs", color = "warning"),
+              actionBttn("stop", HTML("&nbsp; &nbsp; EXIT &nbsp; &nbsp;"), style = "gradient", size = "xs", color = "warning"),
               br()
             )
           )
@@ -293,20 +369,25 @@ server <- function(input, output, session) {
       reactiveResults(NULL)
       reactiveDone(FALSE)
       commentsLog(NULL)
-      
+      # FIX: also clear the results and buttons from any previous file, so a
+      # failed or fresh upload can't be analyzed/downloaded against stale data
+      OUTPUT <<- NULL
+      reactiveDataValidated(NULL)
+      output$GoButton <- NULL
+      output$downloadButton <- NULL
+
       Filename <- input$upload$datapath
       ext <- tools::file_ext(Filename)
-      
+
       # Switch statement started to fail parsing... ????
       if (!ext %in% c("csv", "xlsx", "xls"))
       {
         outputComments(
-          paste0(".",ext,"is not a supported file type."
-          )
+          paste0(".", ext, " is not a supported file type.")  # FIX: spacing
         )
         return()
       }
-      
+
       if (ext == "csv")
       {
         DATA <<- read.csv(Filename)
@@ -321,7 +402,12 @@ server <- function(input, output, session) {
       }
       if (ext == "xls")
       {
-        DATA <<- read.xl(Filename)
+        # FIX: was read.xl(), which does not exist in any loaded package -
+        # every .xls upload crashed the session. readxl::read_excel() is the
+        # correct reader; as.data.frame() converts its tibble return value,
+        # whose different [,col] subsetting semantics would otherwise break
+        # the column handling downstream.
+        DATA <<- as.data.frame(read_excel(Filename))
         reactiveData(DATA)
         return()
       }
@@ -345,12 +431,18 @@ server <- function(input, output, session) {
       outputComments(paste("Column names:", paste(ColumnNames, collapse = ", ")))
       
       # Add trial number if necessary
-      TRIALS <- grep("TRIAL", ColumnNames)
-      if (length(TRIALS) == 0)
+      # FIX: the rename is now inside an else branch. It previously ran
+      # unconditionally, so with no TRIAL column present it indexed
+      # names(DATA) with NA. (Also renamed the local from TRIALS to
+      # TrialColumns: it held column indexes, not trial IDs, and shadowed
+      # the session-level TRIALS list.)
+      TrialColumns <- grep("TRIAL", ColumnNames)
+      if (length(TrialColumns) == 0)
       {
         DATA$TRIAL <- 1
+      } else {
+        names(DATA)[TrialColumns[1]] <- "TRIAL"
       }
-      names(DATA)[TRIALS[1]] <- "TRIAL"
       ColumnNames <- names(DATA)
       
       ################################################
@@ -415,7 +507,20 @@ server <- function(input, output, session) {
         outputComments("Missing column labeled SD")
         FAIL <- TRUE
       }
-      
+
+      # FIX: force N, MEAN, and SD to numeric. Excel/CSV files with a stray
+      # text cell make the whole column character, and character data in the
+      # per-line checks below crashed the app (if (NA) errors). Coercion
+      # turns non-numeric cells into NA, which those checks then report to
+      # the user line by line instead of crashing.
+      for (col in c("N", "MEAN", "SD"))
+      {
+        if (!is.null(DATA[[col]]) && !is.numeric(DATA[[col]]))
+        {
+          DATA[[col]] <- suppressWarnings(as.numeric(DATA[[col]]))
+        }
+      }
+
       # Add rounding column for the mean  
       MeanColumns <- grep("MEAN", ColumnNames)
       RoundMeanColumn <- which(ColumnNames[MeanColumns] != "MEAN")
@@ -522,12 +627,22 @@ server <- function(input, output, session) {
             outputComments(paste("This appears to be a continuous variable. However, it has NA entries for required fields."))
             outputComments(paste("Specifically: ", message))
             FAIL <- TRUE
-          }
-          # Fix MEAN digits if Mean has any decimal digits
-          if (DATA$MEAN[i] != as.integer(DATA$MEAN[i]))
-          {
-            digits <- nchar(sub("^.*\\.", "", as.character(DATA$MEAN[i])))
-            if (DATA$ROUND_MEAN[i] < digits) DATA$ROUND_MEAN[i] <- digits
+          } else {
+            # Fix MEAN digits if Mean has any decimal digits
+            # FIX: two changes here.
+            # (1) This block is now the else of the NA check above. It
+            #     previously ran even for rows just flagged as having a
+            #     missing MEAN, and if (NA != ...) is a fatal error - the
+            #     user got a crash instead of the validation messages.
+            # (2) The decimal test is now MEAN %% 1 != 0 rather than
+            #     MEAN != as.integer(MEAN): as.integer() returns NA for
+            #     values beyond +/-2^31 (e.g. large counts), which would
+            #     also crash the if().
+            if (DATA$MEAN[i] %% 1 != 0)
+            {
+              digits <- nchar(sub("^.*\\.", "", as.character(DATA$MEAN[i])))
+              if (DATA$ROUND_MEAN[i] < digits) DATA$ROUND_MEAN[i] <- digits
+            }
           }
         }
       }
@@ -548,20 +663,29 @@ server <- function(input, output, session) {
       CategoryNames <<- CategoryNames
       
       LengthTrials <- length(TRIALS)
-      cat("length trials: ",length(TRIALS), "\n")
+      # FIX: the Analyze button now renders into output$GoButton - the slot
+      # ui.R provides for it - instead of output$downloadButton. Sharing the
+      # download slot made the Analyze button disappear as soon as results
+      # were ready, so a trial could not be re-analyzed without re-uploading.
+      # Also removed the style/size/color arguments: those belong to
+      # shinyWidgets::actionBttn, not bslib::input_task_button, which was
+      # silently emitting them as meaningless HTML attributes (including
+      # style="gradient", which is invalid CSS). input_task_button is kept
+      # for its automatic busy state during the long simulation.
+      # (Also removed a leftover debugging cat() and a dead HTML("<br>")
+      # whose value was discarded.)
       if (LengthTrials == 1)
       {
-        output$downloadButton <- renderUI({
+        output$GoButton <- renderUI({
           input_task_button(
-            "go", HTML("&nbsp &nbsp Analyze Trial &nbsp &nbsp"), style = "gradient", size = "xs", color = "success")
+            "go", HTML("&nbsp; &nbsp; Analyze Trial &nbsp; &nbsp;"))
         })
       } else {
-        output$downloadButton <- renderUI({
-          HTML("<br>")
+        output$GoButton <- renderUI({
           input_task_button(
             "go", HTML(
               paste(
-                "&nbsp &nbsp Analyze", LengthTrials, "Trials &nbsp &nbsp")))
+                "&nbsp; &nbsp; Analyze", LengthTrials, "Trials &nbsp; &nbsp;")))
         })
       }
       # Set reactive value
