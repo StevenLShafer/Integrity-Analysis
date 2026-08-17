@@ -1,0 +1,361 @@
+<title>ParsePDF — Architecture Map</title>
+<style>
+  :root {
+    --paper:        #f6f7f8;
+    --surface:      #ffffff;
+    --surface-2:    #eef1f3;
+    --ink:          #1c262e;
+    --ink-soft:     #47555f;
+    --ink-faint:    #6d7a84;
+    --line:         #dbe0e4;
+    --line-strong:  #c3ccd2;
+    /* domain accents: deterministic = teal, model-read = amber, money = red */
+    --det:          #0e7c74;
+    --det-soft:     #d6ebe9;
+    --ai:           #b9770b;
+    --ai-soft:      #f3e6cd;
+    --cost:         #a23b3b;
+    --cost-soft:    #f3e0e0;
+    --slate:        #2c3e50;
+    --radius:       10px;
+    --radius-sm:    6px;
+    --maxw:         1060px;
+    --mono: ui-monospace, "SF Mono", "Cascadia Mono", "JetBrains Mono", Menlo, Consolas, monospace;
+    --sans: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --paper:#12181d; --surface:#1a2229; --surface-2:#212b33;
+      --ink:#e6ebee; --ink-soft:#aab6bd; --ink-faint:#7d8b94;
+      --line:#2b363e; --line-strong:#3a4750;
+      --det:#35b3a8; --det-soft:#12302e; --ai:#e0a63d; --ai-soft:#34290f;
+      --cost:#d1706f; --cost-soft:#35211f; --slate:#7d96ad;
+    }
+  }
+  :root[data-theme="dark"] {
+    --paper:#12181d; --surface:#1a2229; --surface-2:#212b33;
+    --ink:#e6ebee; --ink-soft:#aab6bd; --ink-faint:#7d8b94;
+    --line:#2b363e; --line-strong:#3a4750;
+    --det:#35b3a8; --det-soft:#12302e; --ai:#e0a63d; --ai-soft:#34290f;
+    --cost:#d1706f; --cost-soft:#35211f; --slate:#7d96ad;
+  }
+  :root[data-theme="light"] {
+    --paper:#f6f7f8; --surface:#ffffff; --surface-2:#eef1f3;
+    --ink:#1c262e; --ink-soft:#47555f; --ink-faint:#6d7a84;
+    --line:#dbe0e4; --line-strong:#c3ccd2;
+    --det:#0e7c74; --det-soft:#d6ebe9; --ai:#b9770b; --ai-soft:#f3e6cd;
+    --cost:#a23b3b; --cost-soft:#f3e0e0; --slate:#2c3e50;
+  }
+
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--paper); color:var(--ink);
+         font-family:var(--sans); line-height:1.55; -webkit-font-smoothing:antialiased; }
+  .wrap { max-width:var(--maxw); margin:0 auto; padding:0 24px; }
+
+  header { padding:44px 0 28px; border-bottom:1px solid var(--line); background:var(--surface); }
+  .eyebrow { font-size:12px; letter-spacing:.14em; text-transform:uppercase;
+             color:var(--ink-faint); font-weight:600; }
+  h1 { margin:.25em 0 .3em; font-size:34px; letter-spacing:-.02em; }
+  .dek { margin:0; color:var(--ink-soft); max-width:70ch; }
+
+  section { padding:34px 0; border-bottom:1px solid var(--line); }
+  .sec-label { font-size:12px; letter-spacing:.14em; text-transform:uppercase;
+               color:var(--ink-faint); font-weight:600; margin-bottom:6px; }
+  h2 { margin:0 0 .5em; font-size:23px; letter-spacing:-.01em; }
+  h3 { margin:1.6em 0 .4em; font-size:16px; }
+  p { max-width:76ch; }
+  code { font-family:var(--mono); font-size:.9em; background:var(--surface-2);
+         padding:.1em .35em; border-radius:4px; }
+
+  .callout { border:1px solid var(--line-strong); border-left:4px solid var(--det);
+             background:var(--surface); border-radius:var(--radius);
+             padding:16px 18px; margin:18px 0; }
+  .callout.money { border-left-color:var(--cost); background:var(--cost-soft); }
+  .callout p { margin:0; }
+  .callout .t { font-weight:700; display:block; margin-bottom:4px; }
+
+  table { border-collapse:collapse; width:100%; font-size:14px; }
+  .table-scroll { overflow-x:auto; margin:14px 0; border:1px solid var(--line);
+                  border-radius:var(--radius); background:var(--surface); }
+  th, td { text-align:left; padding:9px 12px; border-bottom:1px solid var(--line);
+           vertical-align:top; }
+  th { background:var(--surface-2); font-size:12px; letter-spacing:.05em;
+       text-transform:uppercase; color:var(--ink-soft); white-space:nowrap; }
+  tbody tr:last-child td { border-bottom:none; }
+
+  .pill { display:inline-block; font-size:11px; font-weight:700; letter-spacing:.04em;
+          padding:2px 8px; border-radius:999px; white-space:nowrap; }
+  .pill.free { background:var(--det-soft); color:var(--det); }
+  .pill.paid { background:var(--cost-soft); color:var(--cost); }
+  .pill.maybe { background:var(--ai-soft); color:var(--ai); }
+
+  figure { margin:18px 0; }
+  figcaption { font-size:13px; color:var(--ink-faint); margin-top:8px; }
+  svg { display:block; width:100%; height:auto; }
+
+  .legend { display:flex; gap:18px; flex-wrap:wrap; font-size:13px;
+            color:var(--ink-soft); margin:10px 0 0; }
+  .legend span { display:flex; align-items:center; gap:6px; }
+  .sw { width:12px; height:12px; border-radius:3px; display:inline-block; }
+
+  footer { padding:26px 0 60px; color:var(--ink-faint); font-size:13px; }
+</style>
+
+<header>
+  <div class="wrap">
+    <div class="eyebrow">ParsePDF · Architecture</div>
+    <h1>How a trial PDF becomes a baseline table</h1>
+    <p class="dek">ParsePDF extracts the baseline characteristics table of a randomized
+    controlled trial and returns one row per variable per treatment arm, in the input layout of
+    the Integrity-Analysis app. This map shows the pipeline, the one invariant that governs it,
+    and — marked in red throughout — every step that can charge your Anthropic account.</p>
+  </div>
+</header>
+
+<section>
+  <div class="wrap">
+    <div class="sec-label">The rule everything follows</div>
+    <h2>Deterministic first, and it always wins</h2>
+    <div class="callout">
+      <span class="t">The invariant</span>
+      <p>The deterministic engine always runs first, and its numbers always win. The AI
+      fallback only fills gaps, and never overwrites a value that was located on the page by
+      coordinate. Every row records which engine produced it, because this data is used in
+      research-fraud investigation and a reader must be able to tell the two apart.</p>
+    </div>
+
+    <div class="table-scroll">
+      <table>
+        <thead><tr><th>Engine</th><th>Entry point</th><th>Network</th><th>Cost</th><th>Tag</th></tr></thead>
+        <tbody>
+          <tr><td>Deterministic</td><td><code>parseBaselineTableHeuristics()</code></td>
+              <td>none, ever</td><td><span class="pill free">free</span></td><td><code>heuristic</code></td></tr>
+          <tr><td>AI — table page</td><td><code>parseBaselineTableAI(source&nbsp;=&nbsp;"table")</code></td>
+              <td>Messages API</td><td><span class="pill paid">~$0.055 / article</span></td><td><code>ai</code></td></tr>
+          <tr><td>AI — running text</td><td><code>parseBaselineTableAI(source&nbsp;=&nbsp;"prose")</code></td>
+              <td>Messages API</td><td><span class="pill paid">~$0.11 / article</span></td><td><code>ai-prose</code></td></tr>
+          <tr><td>Hybrid <em>(default)</em></td><td><code>parseBaselineTable()</code></td>
+              <td>only when flags fire</td><td><span class="pill maybe">sometimes</span></td><td>mixed</td></tr>
+          <tr><td>Batch</td><td><code>parseBaselineTableFiles()</code></td>
+              <td><code>ai&nbsp;=&nbsp;"never"</code> by default</td><td><span class="pill free">free unless opted in</span></td><td>mixed</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <div class="sec-label">Pipeline</div>
+    <h2>Nine stages, one of which costs money</h2>
+
+    <figure>
+      <svg viewBox="0 0 980 560" xmlns="http://www.w3.org/2000/svg" role="img"
+           aria-label="Pipeline from PDF to spreadsheet: read, split columns, find captions, rank, parse, score, assess, optional paid AI fallback, emit.">
+        <defs>
+          <marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+            <path d="M0,0 L10,5 L0,10 z" fill="currentColor"/>
+          </marker>
+        </defs>
+        <g font-family="system-ui, sans-serif" font-size="13">
+
+          <!-- free stages -->
+          <g fill="var(--det-soft)" stroke="var(--det)" stroke-width="1.5">
+            <rect x="20"  y="20"  width="270" height="54" rx="8"/>
+            <rect x="20"  y="94"  width="270" height="54" rx="8"/>
+            <rect x="20"  y="168" width="270" height="54" rx="8"/>
+            <rect x="20"  y="242" width="270" height="54" rx="8"/>
+            <rect x="20"  y="316" width="270" height="54" rx="8"/>
+            <rect x="20"  y="390" width="270" height="54" rx="8"/>
+            <rect x="20"  y="464" width="270" height="54" rx="8"/>
+          </g>
+          <g fill="var(--ink)">
+            <text x="34" y="41" font-weight="700">01 · Read PDF</text>
+            <text x="34" y="60" fill="var(--ink-soft)">pdftools: every word with x / y / width</text>
+            <text x="34" y="115" font-weight="700">02 · Split page into columns</text>
+            <text x="34" y="134" fill="var(--ink-soft)">.ppPageBands() — find the gutters</text>
+            <text x="34" y="189" font-weight="700">03 · Find captioned tables</text>
+            <text x="34" y="208" fill="var(--ink-soft)">"Table 1" / "TABLE I", Arabic or Roman</text>
+            <text x="34" y="263" font-weight="700">04 · Rank candidates</text>
+            <text x="34" y="282" fill="var(--ink-soft)">baseline-sounding captions first</text>
+            <text x="34" y="337" font-weight="700">05 · Parse one block</text>
+            <text x="34" y="356" fill="var(--ink-soft)">lines → cells → arm columns → rows</text>
+            <text x="34" y="411" font-weight="700">06 · Score, keep the best</text>
+            <text x="34" y="430" fill="var(--ink-soft)">.ppParseScore()</text>
+            <text x="34" y="485" font-weight="700">07 · Assess</text>
+            <text x="34" y="504" fill="var(--ink-soft)">reviewFlags(): gaps? missing arm N?</text>
+          </g>
+
+          <!-- connectors down the free column -->
+          <g stroke="var(--line-strong)" stroke-width="1.6" color="var(--line-strong)" fill="none">
+            <path d="M155,74 L155,94"   marker-end="url(#ar)"/>
+            <path d="M155,148 L155,168" marker-end="url(#ar)"/>
+            <path d="M155,222 L155,242" marker-end="url(#ar)"/>
+            <path d="M155,296 L155,316" marker-end="url(#ar)"/>
+            <path d="M155,370 L155,390" marker-end="url(#ar)"/>
+            <path d="M155,444 L155,464" marker-end="url(#ar)"/>
+          </g>
+
+          <!-- paid stage -->
+          <g>
+            <rect x="380" y="430" width="300" height="88" rx="8"
+                  fill="var(--cost-soft)" stroke="var(--cost)" stroke-width="2" stroke-dasharray="6 4"/>
+            <text x="396" y="455" font-weight="700" fill="var(--cost)">08 · AI fallback — COSTS MONEY</text>
+            <text x="396" y="475" fill="var(--ink-soft)">aiFallback.R · Messages API</text>
+            <text x="396" y="493" fill="var(--ink-soft)">table page ~$0.055 · prose ~$0.11</text>
+            <text x="396" y="511" fill="var(--ink-faint)">skipped entirely when ai = "never"</text>
+          </g>
+
+          <!-- output -->
+          <g>
+            <rect x="720" y="242" width="240" height="72" rx="8"
+                  fill="var(--surface-2)" stroke="var(--line-strong)" stroke-width="1.5"/>
+            <text x="736" y="268" font-weight="700" fill="var(--ink)">09 · Emit</text>
+            <text x="736" y="287" fill="var(--ink-soft)">Template + Provenance</text>
+            <text x="736" y="305" fill="var(--ink-soft)">+ Skipped worksheets</text>
+          </g>
+
+          <!-- branch arrows -->
+          <g stroke="var(--det)" stroke-width="1.8" color="var(--det)" fill="none">
+            <path d="M290,478 L340,478 L340,300 L720,300" marker-end="url(#ar)"/>
+          </g>
+          <text x="352" y="292" fill="var(--det)" font-size="12" font-weight="600">clean → straight out, free</text>
+
+          <g stroke="var(--cost)" stroke-width="1.8" color="var(--cost)" fill="none" stroke-dasharray="6 4">
+            <path d="M290,494 L380,486" marker-end="url(#ar)"/>
+            <path d="M680,462 L830,462 L830,314" marker-end="url(#ar)"/>
+          </g>
+          <text x="300" y="540" fill="var(--cost)" font-size="12" font-weight="600">gaps found, and ai ≠ "never" → paid call</text>
+        </g>
+      </svg>
+      <figcaption>Stages 01–07 are free, offline and reproducible. Stage 08 is the only one
+      that leaves the machine or bills anything, and it is reached only when stage 07 finds
+      gaps and <code>ai</code> is not <code>"never"</code>.</figcaption>
+      <div class="legend">
+        <span><i class="sw" style="background:var(--det-soft);border:1.5px solid var(--det)"></i> free &amp; offline</span>
+        <span><i class="sw" style="background:var(--cost-soft);border:2px dashed var(--cost)"></i> billable API call</span>
+        <span><i class="sw" style="background:var(--surface-2);border:1.5px solid var(--line-strong)"></i> output</span>
+      </div>
+    </figure>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <div class="sec-label">Stage detail</div>
+    <h2>Why the two-column split comes first</h2>
+    <p>Journals are typeset in two columns, and a table usually sits in one of them with body
+    prose beside it. Clustering words into lines by <code>y</code> across the whole page glues
+    each table row onto an unrelated sentence — this single defect made the parser fail on most
+    real articles:</p>
+    <div class="table-scroll">
+      <table><tbody><tr><td><code>achieved with neostigmine (0.05 mg·kg –1 ) and gly-&nbsp;&nbsp;&nbsp;Age (yr)&nbsp;&nbsp;70 ± 6&nbsp;&nbsp;71 ± 5</code></td></tr></tbody></table>
+    </div>
+    <p><code>.ppPageBands()</code> measures, for each 1-point column of <code>x</code>, the
+    fraction of text lines writing into it, and calls a long low-coverage run a gutter.
+    <em>Low</em> rather than <em>zero</em> matters: the running head, the title and full-width
+    footnotes all cross the gutter.</p>
+
+    <h3>Cell shapes the tokenizer recognises</h3>
+    <div class="table-scroll">
+      <table>
+        <thead><tr><th>Token</th><th>Example</th><th>Meaning</th></tr></thead>
+        <tbody>
+          <tr><td><code>meanSD</code></td><td>45.3 ± 12.1</td><td>continuous</td></tr>
+          <tr><td><code>numParen</code></td><td>45.3 (12.1)</td><td>mean (SD) <em>or</em> n (%) — disambiguated from footnotes and labels</td></tr>
+          <tr><td><code>nPct</code></td><td>15 (60%)</td><td>binary category</td></tr>
+          <tr><td><code>fraction</code></td><td>15/10 · 12/8/5</td><td>k-way category</td></tr>
+          <tr><td><code>medianRng</code></td><td>127 [98–160]</td><td><strong>skipped</strong> — the method needs a mean and an SD</td></tr>
+          <tr><td><code>pctOnly</code></td><td>60%</td><td><strong>skipped</strong> — no count</td></tr>
+          <tr><td><code>plain</code></td><td>45.3</td><td>count under a category header, or an arm N</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p><code>ROUND_MEAN</code> is read from the printed glyphs, never inferred from the value:
+    <code>63</code> has 0 decimals and <code>63.0</code> has 1. That distinction is data — it
+    tells the Monte Carlo analysis how much of a discrepancy rounding alone can explain.</p>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <div class="sec-label">Money</div>
+    <h2>Every way this package can charge you</h2>
+    <div class="callout money">
+      <span class="t">One file spends money</span>
+      <p><code>R/aiFallback.R</code> is the only file that touches the network. Everything else
+      — reading the PDF, finding the table, parsing it, writing the spreadsheet — is free,
+      offline and reproducible. Charges go to the Anthropic Console account whose key is in
+      <code>ANTHROPIC_API_KEY</code>.</p>
+    </div>
+
+    <div class="table-scroll">
+      <table>
+        <thead><tr><th>Call</th><th>Spends?</th><th>Measured cost</th></tr></thead>
+        <tbody>
+          <tr><td><code>parseBaselineTableHeuristics(...)</code></td><td><span class="pill free">never</span></td><td>—</td></tr>
+          <tr><td><code>parseBaselineTable(..., ai = "never")</code></td><td><span class="pill free">never</span></td><td>—</td></tr>
+          <tr><td><code>parseBaselineTable(...)</code> <em>(default)</em></td><td><span class="pill maybe">only if flags fire and a key is set</span></td><td>~$0.055–0.11 per article reached</td></tr>
+          <tr><td><code>parseBaselineTable(..., ai = "always")</code></td><td><span class="pill paid">every call</span></td><td>~$0.055 per article</td></tr>
+          <tr><td><code>parseBaselineTableAI(source = "table")</code></td><td><span class="pill paid">every call</span></td><td>~$0.055 (one page)</td></tr>
+          <tr><td><code>parseBaselineTableAI(source = "prose")</code></td><td><span class="pill paid">every call</span></td><td>~$0.11 (whole text, capped by <code>maxChars</code>)</td></tr>
+          <tr><td><code>parseBaselineTableFiles(...)</code></td><td><span class="pill free">not by default</span></td><td>—</td></tr>
+          <tr><td><code>parseBaselineTableFiles(..., ai = "fallback")</code></td><td><span class="pill paid">up to one call per file</span></td><td>a 1,865-file corpus could exceed <strong>$100</strong></td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3>Guards already in place</h3>
+    <p>With no key set, the hybrid returns the deterministic result and its flags rather than
+    erroring. <code>parseBaselineTableFiles()</code> defaults to <code>ai = "never"</code> and
+    announces how many files may be sent before any call is made. <code>maxTokens</code> caps
+    each reply; <code>maxChars</code> caps the prose request.</p>
+
+    <h3>Two habits worth keeping</h3>
+    <p><strong>Page selection is deterministic and free.</strong> Before spending on a batch,
+    check what <code>.ppBestCaptionPage()</code> chooses — sending the model the wrong page
+    produces a confident "there is no table here", and you pay for it anyway.</p>
+    <p><strong>Auto-reload means a runaway loop bills silently.</strong> Scope any corpus run
+    with a small <code>head()</code> first.</p>
+    <p class="dek">Prices are <code>claude-opus-5</code> list at the time of writing — $5 per
+    million input tokens, $25 per million output, thinking billed as output. Check current
+    pricing before relying on these figures.</p>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <div class="sec-label">Evidence</div>
+    <h2>What it actually recovers</h2>
+    <p>The corpus holds <strong>1,865</strong> real journal PDFs, but <strong>the parser has
+    never been run over all of them</strong>. Every figure below comes from a random sample —
+    about 300 distinct articles in total — scored against John Carlisle's hand-extracted values
+    by comparing the multiset of <code>(mean, SD)</code> pairs per PMID, so neither side's
+    naming or arm order matters. Treat them as sample estimates.</p>
+    <div class="table-scroll">
+      <table>
+        <thead><tr><th>Measure</th><th>Result</th><th>Sample actually run</th></tr></thead>
+        <tbody>
+          <tr><td>Deterministic — articles yielding a table</td><td>176 / 250 (70%)</td><td>250-article random sample, seed 3</td></tr>
+          <tr><td>Deterministic — known pairs recovered</td><td>440 / 982 (45%)</td><td>the 88 of those with ground truth</td></tr>
+          <tr><td>Decimal places correct, on recovered pairs</td><td>99.4%</td><td>same 88</td></tr>
+          <tr><td>AI prose — articles with no table at all</td><td>100 / 110 (91%)</td><td>10 articles</td></tr>
+          <tr><td>AI table — articles whose table was misread</td><td>205 / 254 (81%)</td><td>21 articles</td></tr>
+          <tr><td>Batch runner survives a poppler hang</td><td>21 / 30 parsed, hang killed at 30 s</td><td>30 articles</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p>The AI rows are measured on exactly the articles the deterministic engine scores
+    <strong>zero</strong> on, so they show what the fallback rescues rather than repeating what
+    already worked. The two engines fail on different things, which is the argument for keeping
+    both.</p>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    Keep this map and <code>architecture.md</code> in step when the engines, the pipeline, the
+    file list, the output contract, or the cost table change. The cost table is the part most
+    likely to go stale and the most consequential when it does.
+  </div>
+</footer>

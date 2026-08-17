@@ -9,8 +9,8 @@ run_app(testNote = NULL)
 \arguments{
 \item{testNote}{optional single string shown as a prominent banner under
 the header, naming the PR under test and what to look at (e.g.
-`"PR #6: function extraction - exercise upload, validate, analyze"`).
-PR test deployments (`IntegrityAnalysis_PR_<n>`) deploy an `app.R` that
+\code{"PR #6: function extraction - exercise upload, validate, analyze"}).
+PR test deployments (\verb{IntegrityAnalysis_PR_<n>}) deploy an \code{app.R} that
 passes this; production passes nothing and shows no banner.}
 }
 \description{

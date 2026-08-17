@@ -25,7 +25,12 @@ validation pipeline + `P_Calc()` Monte Carlo — was `server.R`),
 `inst/www` under the `www/` resource prefix). `app.R` is a one-line shim.
 Bundled assets live in `inst/www`; `Template.xlsx`, `Example.xlsx`, and
 `IntegrityAnalysis.pdf` in `inst/extdata`, resolved with `system.file()`.
-No renv (deliberate — see the plan); tests arrive in phase 3 (issue 4).
+No renv (deliberate — see the plan). Since the ParsePDF fold-in
+(2026-08-17, issue 9) the package also contains the PDF parser
+(`R/parseBaselineTable*.R`, `tokenize.R`, `pageLayout.R`, `aiFallback.R`,
+`utils.R`, `writeIntegrityTemplate.R`, all internals `.pp`-prefixed) and
+its ~295-assertion testthat suite (`tests/testthat/`, synthetic PDFs, no
+fixtures needed); app-side tests are still to come (issue 4).
 
 The upload pipeline: file → column-name normalization by grep (any
 "MEAN"-containing name that isn't MEAN → `ROUND_MEAN`, "OBS" →
@@ -97,10 +102,51 @@ Stouffer's `sumz()`.
 - Keep secrets and per-user data out of `outputComments()` logs and out of
   bookmark state.
 
+## The parser optimization loop
+
+The PDF parser (the `R/` files prefixed with parse*/tokenize/pageLayout/
+aiFallback, folded in from the ParsePDF package 2026-08-17, issue 9) is
+the hardest problem in this repository, and it is **deliberately set up to
+be re-attacked by large language models every few months**. If you are an
+LLM reading this because Steve asked you to look for parser improvements,
+this section is your map.
+
+- **The problem**: extract the baseline demographics table ("Table 1") of
+  a randomized controlled trial from an article PDF — one row per
+  variable per arm, means/SDs/Ns with their printed rounding — using only
+  the PDF text layer, deterministically. Journals differ in layout,
+  column conventions, and font encodings (several journals print `=` or
+  `±` as private-use glyphs; see the repairs pinned in the test suite).
+- **The evidence**: [`corpus/ParseOutcomes.csv`](corpus/ParseOutcomes.csv)
+  — the master sheet, one row per PDF in the 1,865-article corpus, with a
+  binary outcome (**successfully parsed / not successfully parsed**) and a
+  `COMMENTS` column: the steps taken when parsing succeeded, and where the
+  process failed when it did not. Read the failures, then read the code.
+  [`corpus/README.md`](corpus/README.md) documents the columns, the
+  current baseline (71.9% parsed; 58% exact value recovery against
+  Carlisle), and the regeneration command.
+- **The corpus PDFs** are copyrighted and live locally at
+  `C:/temp/journals` (`<journal>/<year>/<n.m>.pdf`) — never commit them.
+  The test suite needs none of them (synthetic PDFs via `pdf()`).
+- **The architecture**: [`docs/parsepdf-architecture.md`](docs/parsepdf-architecture.md)
+  (with an HTML twin). Entry points: `parseBaselineTable()` (one PDF,
+  deterministic-then-optional-AI), `parseBaselineTableFiles()` (batches;
+  one subprocess per file with an OS timeout — never loop over PDFs
+  in-process, ~2% hang poppler), `writeIntegrityTemplate()` (emits the
+  app's input format). The AI fallback's prompt and JSON schema — part of
+  the published method — are `.ppSystemPrompt()` and
+  `.ppTableSchemaJson()` in `R/aiFallback.R`, written to be read.
+- **The rules**: the deployed path stays deterministic and offline (the
+  app screens *unpublished* manuscripts; same input must always give the
+  same verdict). Keep the ~295-assertion test suite green and add a
+  fixture for every new corpus defect found. Score any change both ways:
+  parse rate (`corpus/buildParseOutcomes.R`) **and** value accuracy
+  against Carlisle — parsing more tables while misreading more numbers is
+  a regression.
+
 ## Adjacent work
 
-- **`C:/dev/ParsePDF`** (private package): the maintained PDF
-  baseline-table parser, to be folded into this repo (ISSUES.md issue 9).
-  The in-repo `parseCovariateTable.R` is an earlier copy of that logic.
+- **`C:/dev/ParsePDF`**: the parser's former home (now folded in here —
+  its git history holds the development record; the repo is retired).
 - **`G:/projects/Fraud/2025`**: Steve's original dev folder (assets,
   Carlisle corpus files, old code in `Old Files/`).

@@ -6,7 +6,7 @@
 ###############################
 #
 # PROVENANCE: was ui.R at the repository root until the package restructure
-# (phase 1, Claude Code model Claude Fable 5, 2026-08-16 — see
+# (phase 1, Claude Code model Claude Fable 5, 2026-08-16 - see
 # docs/package-restructure-plan.md). Two changes only:
 #   - the top-level `ui <- ...` object became the function app_ui(), so the
 #     page is built when run_app() asks for it rather than at package load
@@ -74,7 +74,7 @@ app_ui <- function(testNote = NULL)
       if (!is.null(testNote))
         fluidRow(
           div(
-            strong("TEST DEPLOYMENT — "), testNote,
+            strong("TEST DEPLOYMENT - "), testNote,
             style = paste0(
               "background-color: #f39c12; color: #000; padding: 8px 5%; ",
               "font-size: 15px; border-bottom: 2px solid #c87f0a;")
