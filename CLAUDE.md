@@ -12,11 +12,17 @@ A Shiny app implementing the Carlisle–Shafer Monte Carlo analysis of
 baseline data in randomized controlled trials, used in Steve Shafer's work
 as a journal editor detecting research fraud (references in README.md).
 This is a **standalone project, unrelated to any other repository on this
-machine**. Three flat files: `global.R`
-(libraries, constants, `sumz()`, `outputComments()`), `ui.R`
-(shinydashboard page), `server.R` (validation pipeline + `P_Calc()` Monte
-Carlo). Not a package: no renv, no Collate, no tests yet (ISSUES.md
-issue 4).
+machine**. Since the phase-1 restructure (2026-08-16, ISSUES.md issue 10,
+plan in [`docs/package-restructure-plan.md`](docs/package-restructure-plan.md))
+it is an **R package**, modeled on stanpumpR: `R/app_globals.R` (constants,
+`sumz()`, `outputComments()` — was `global.R`), `R/app_ui.R` (`app_ui()`,
+shinydashboard page — was `ui.R`), `R/app_server.R` (`app_server`,
+validation pipeline + `P_Calc()` Monte Carlo — was `server.R`),
+`R/app_run.R` (exported `run_app()`, attaches libraries, registers
+`inst/www` under the `www/` resource prefix). `app.R` is a one-line shim.
+Bundled assets live in `inst/www`; `Template.xlsx`, `Example.xlsx`, and
+`IntegrityAnalysis.pdf` in `inst/extdata`, resolved with `system.file()`.
+No renv (deliberate — see the plan); tests arrive in phase 3 (issue 4).
 
 The upload pipeline: file → column-name normalization by grep (any
 "MEAN"-containing name that isn't MEAN → `ROUND_MEAN`, "OBS" →
@@ -33,11 +39,26 @@ Stouffer's `sumz()`.
   user library has all packages; the 4.6 library does not).
 - Do not start R while the shell is in another project's directory — an
   renv-managed project there will hijack the library path.
-- Deploy with the exact `deployApp()` call in
-  [`handoff/2026-08-16-merged-handoff.md`](handoff/2026-08-16-merged-handoff.md)
-  — **always with the explicit `appFiles` list**, because the working tree
-  holds Carlisle data spreadsheets that must never be uploaded. PR test
-  apps are `IntegrityAnalysis_PR_<n>`; purge them after merging.
+- Run locally: install the package (`R CMD INSTALL --no-multiarch .`) then
+  `IntegrityAnalysis::run_app()` — or `shiny::runApp()` on `app.R`.
+- Deploy (since the phase-1 package restructure): install the package
+  **from GitHub** so rsconnect records the GitHub source, then ship only
+  the shim — the old hand-maintained `appFiles` list (and its risk of
+  uploading the Carlisle spreadsheets) is gone:
+
+  ```r
+  remotes::install_github("StevenLShafer/IntegrityAnalysis")  # or @<branch> for a PR app
+  rsconnect::deployApp(appDir = "C:/dev/IntegrityAnalysis",
+    appName = "IntegrityAnalysis",       # or IntegrityAnalysis_PR_<n>
+    appFiles = "app.R",
+    account = "steveshafer", server = "shinyapps.io",
+    forceUpdate = TRUE, launch.browser = FALSE)
+  ```
+
+  A locally-installed (`R CMD INSTALL`) copy will NOT deploy — shinyapps.io
+  can only fetch the package from GitHub, so push first, deploy second.
+  PR test apps are `IntegrityAnalysis_PR_<n>`; purge them after merging.
+  (The pre-package procedure, for history: `handoff/2026-08-16-merged-handoff.md`.)
 - Production: https://steveshafer.shinyapps.io/IntegrityAnalysis/
   (rsconnect account `steveshafer`).
 - Headless functional testing pattern (until a real suite exists): drive
@@ -47,12 +68,12 @@ Stouffer's `sumz()`.
 
 ## Conventions
 
-- **`global.R` stays lower-case** — shinyapps.io (Linux) never sources
-  `Global.R`.
+- Case sensitivity: shinyapps.io runs Linux — filenames in code must match
+  exactly (the old `Global.R`-vs-`global.R` failure generalizes).
 - Generous comments; every non-obvious or AI-drafted change carries a
   provenance header (origin, date, run/verified status) and in-place
-  `FIX:`/rationale comments. See the tops of `global.R`, `server.R`, and
-  `parseCovariateTable.R` for the house style.
+  `FIX:`/rationale comments. See the tops of `R/app_globals.R`,
+  `R/app_server.R`, and `parseCovariateTable.R` for the house style.
 - Small, focused commits — one issue each. **Push immediately after
   committing**: two agents have shared this repository, and
   committed-but-unpushed work was already lost once when a merged branch

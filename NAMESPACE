@@ -1,0 +1,4 @@
+# Hand-written for phase 1 of the package restructure (roxygen2 generation
+# arrives with phase 2, when functions get roxygen headers). Only the app
+# launcher is exported; everything else is internal.
+export(run_app)

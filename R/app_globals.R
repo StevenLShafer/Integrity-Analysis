@@ -1,9 +1,13 @@
-# global.R
+# app_globals.R — constants and helpers shared by the UI and server.
 #
-# NOTE: this file must be named "global.R" (lower case g). Shiny auto-sources
-# "global.R" by exact name; Windows' case-insensitive filesystem hides the
-# problem locally, but on the Linux servers at shinyapps.io "Global.R" is NOT
-# sourced, and the app fails to start because no libraries are loaded.
+# PROVENANCE: was global.R at the repository root until the package
+# restructure (phase 1, Claude Code model Claude Fable 5, 2026-08-16 — see
+# docs/package-restructure-plan.md). Nothing here is auto-sourced anymore:
+# this is ordinary package code, loaded when the package loads. The
+# library() calls that used to open this file moved to run_app() in
+# app_run.R (the stanpumpR pattern); everything below is unchanged.
+# The historical note about the "global.R" lower-case filename is preserved
+# in git history; it no longer applies because no file is sourced by name.
 #
 # PROVENANCE: Cleanup by Claude Code (model: Claude Fable 5), 2026-08-14,
 # reviewed and tested by running the app locally (see PR description).
@@ -33,18 +37,6 @@
 #     which gives each session its own copy.
 #   - m was assigned 100000 and then immediately overwritten with 15000;
 #     kept the single, deliberate assignment.
-
-library(shiny)
-library(openxlsx)       # read.xlsx / write.xlsx (xlsx upload + results download)
-library(readxl)         # read_excel (legacy .xls upload)
-library(Rfast)          # rowmeans / rowsums on the Monte Carlo matrix
-library(shinyjs)
-library(shinyWidgets)   # actionBttn
-library(foreach)        # %do% loop over rows in P_Calc
-library(MBESS)          # s.u: unbiased SD correction for small N
-library(dqrng)          # dqrnorm: fast RNG for the simulated means
-library(bslib)          # input_task_button
-library(shinydashboard)
 
 # m is the replication number for the Monte Carlo simulation.
 # (100000 gives smoother tails but is ~7x slower; 15000 is the value the
