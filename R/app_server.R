@@ -51,6 +51,8 @@ app_server <- function(input, output, session) {
   TRIALS <- NULL         # unique trial identifiers in DATA
   ColumnNames <- NULL    # cleaned-up column names of DATA
   CategoryNames <- NULL  # columns holding categorical (count) data
+  pdfResult <- NULL      # ParsePDFTable from a PDF upload, for the
+                         # "Download Extracted Table" round trip
 
   # FIX: removed stopImplicitCluster() and the commented-out doParallel
   # cluster setup. The row loop in P_Calc runs sequentially (%do%), so no
@@ -161,16 +163,98 @@ app_server <- function(input, output, session) {
       reactiveDataValidated(NULL)
       output$GoButton <- NULL
       output$downloadButton <- NULL
+      pdfResult <<- NULL
+      output$extractedButton <- NULL
 
       Filename <- input$upload$datapath
-      ext <- tools::file_ext(Filename)
+      ext <- tolower(tools::file_ext(Filename))
 
       # Switch statement started to fail parsing... ????
-      if (!ext %in% c("csv", "xlsx", "xls"))
+      if (!ext %in% c("csv", "xlsx", "xls", "pdf"))
       {
         outputComments(
           paste0(".", ext, " is not a supported file type.")  # FIX: spacing
         )
+        return()
+      }
+
+      # PDF upload (Steve's request, 2026-08-17): parse the article's
+      # baseline table and feed it into the SAME validation pipeline the
+      # spreadsheets use. Design constraints, all deliberate:
+      #   - Deterministic engine only (ai = "never"): manuscripts under
+      #     review are confidential, so nothing may leave the server, and
+      #     the same PDF must always yield the same verdict.
+      #   - Parsed in a SUBPROCESS with an OS timeout, never in-process:
+      #     ~2% of real journal PDFs hang poppler indefinitely, R cannot
+      #     interrupt it, and an in-process hang would take this worker
+      #     down for every connected user.
+      #   - A partial extraction is a round trip, not a dead end: the
+      #     extracted table is offered as a download in the app's own
+      #     input layout, so the user fills the gaps the printed table
+      #     did not provide (most often arm N) and re-uploads the
+      #     spreadsheet. Expectation from the corpus (see
+      #     corpus/ParseOutcomes.csv): roughly a third of PDFs yield a
+      #     fully analysable trial; the spreadsheet path is the reliable
+      #     one and this is the convenient one.
+      if (ext == "pdf")
+      {
+        progress <- shiny::Progress$new(session, style = "notification")
+        progress$set(message = "Parsing PDF ",
+                     detail = "deterministic engine, up to 60 s")
+        res <- parseBaselineTableFiles(Filename, ai = "never",
+                                       timeout = 60, quiet = TRUE)
+        progress$close()
+        r <- res$result[[1]]
+        if (is.null(r) || nrow(r$data) == 0)
+        {
+          # The parser's error text is written for the R console; strip
+          # the advice that means nothing inside the app (`pages=`,
+          # `layout=`, ai = "always", ocr = TRUE), and replace the
+          # uploaded temp-file path with the name the user actually chose.
+          msg <- res$error[1]
+          msg <- gsub(Filename, input$upload$name, msg, fixed = TRUE)
+          msg <- sub(" Try the `pages` or `layout` argument, or ai = \"always\"\\.",
+                     "", msg)
+          msg <- sub(" Re-run with ocr = TRUE\\.",
+                     " (a scanned image with no text layer - the parser reads text, not pictures)",
+                     msg)
+          outputComments(paste0(
+            "Could not extract a baseline table from ", input$upload$name,
+            ": ", msg))
+          outputComments(paste(
+            "This is expected for roughly a quarter of published PDFs -",
+            "layouts vary more than any parser can. You can still analyze",
+            "this trial by entering its table into the Template",
+            "spreadsheet (sidebar) and uploading that."))
+          return()
+        }
+
+        # The parse narrative, then every unusable line and why - the
+        # user should never have to guess what the parser did.
+        outputComments(paste0(
+          "Extracted the baseline table from ", input$upload$name,
+          ": table page ", res$page[1], ", ", res$arms[1], " arm(s) (",
+          res$armsWithN[1], " with N), ", res$variables[1],
+          " variable(s), ", res$continuous[1], " with mean and SD."))
+        if (nrow(r$skipped) > 0)
+        {
+          outputComments(paste0(
+            nrow(r$skipped), " table line(s) could not be used:"))
+          for (k in seq_len(nrow(r$skipped)))
+            outputComments(paste0("- ", r$skipped$label[k], ": ",
+                                  r$skipped$reason[k]))
+        }
+
+        # The uploaded temp file has an opaque name; label the trial with
+        # the real file name the user chose.
+        r$data$TRIAL <- tools::file_path_sans_ext(input$upload$name)
+        pdfResult <<- r
+        output$extractedButton <- renderUI({
+          downloadButton("extracted", "Download Extracted Table")
+        })
+
+        DATA <<- r$data
+        reactiveData(DATA)
         return()
       }
 
@@ -286,6 +370,18 @@ app_server <- function(input, output, session) {
       x <- OUTPUT
       names(x) <- c("TRIAL", "ROW", "Fraction <=", "Fraction >=")
       write.xlsx(x, file)
+    })
+
+  # The extracted-table round trip: writeIntegrityTemplate() emits the
+  # app's own input layout (plus Provenance and Skipped sheets after the
+  # data; the app reads only the first sheet on re-upload).
+  output$extracted <- downloadHandler(
+    filename = function() {
+      paste0("Extracted ",
+             tools::file_path_sans_ext(input$upload$name), ".xlsx")
+    },
+    content = function(file) {
+      writeIntegrityTemplate(pdfResult, file)
     })
 
   output$documentation <- downloadHandler(
