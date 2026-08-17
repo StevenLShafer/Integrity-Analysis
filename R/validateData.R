@@ -144,8 +144,9 @@ validateData <- function(DATA) {
   # text cell make the whole column character, and character data in the
   # per-line checks below crashed the app (if (NA) errors). Coercion
   # turns non-numeric cells into NA, which those checks then report to
-  # the user line by line instead of crashing.
-  for (col in c("N", "MEAN", "SD"))
+  # the user line by line instead of crashing. Q1/Q3 and SE included
+  # (2026-08-17, median/IQR support).
+  for (col in c("N", "MEAN", "SD", "SE", "Q1", "Q3"))
   {
     if (!is.null(DATA[[col]]) && !is.numeric(DATA[[col]]))
     {
@@ -203,8 +204,12 @@ validateData <- function(DATA) {
   # They MUST be excluded here: is_category() calls any numeric column with
   # an NA and integer values a category, and ROUND_DISPERSION is exactly
   # that, so it would otherwise be analysed as a count column.
+  # Q1/Q3 (median/IQR rows, 2026-08-17) join SE and ROUND_DISPERSION on
+  # the excluded list for the same reason: integer-valued quartiles with
+  # NAs elsewhere would otherwise be swallowed as category columns.
   CategoryNames <-
     ColumnNames[!ColumnNames %in% c("TRIAL", "ROW", "MEAN","N", "SD", "SE",
+                                    "Q1", "Q3",
                                     "ROUND_OBSERVATION", "ROUND_MEAN",
                                     "ROUND_DISPERSION")]
   MiscNames <- NULL
@@ -236,7 +241,8 @@ validateData <- function(DATA) {
     if (any(!is.na(DATA[i, CategoryNames]))) # If there is any category entry, continuous columns are set to NA
     {
       DATA$ROUND_MEAN[i] <- DATA$ROUND_OBSERVATION[i] <- NA
-      if (any(!is.na(DATA[i, c("N", "MEAN", "SD")])))
+      if (any(!is.na(DATA[i, intersect(c("N", "MEAN", "SD", "Q1", "Q3"),
+                                       names(DATA))])))
       {
         outputComments(paste("Please look at line", i+1))
         message <- NULL
@@ -254,6 +260,54 @@ validateData <- function(DATA) {
         outputComments(paste("This appears to be a category. However, it has entries for continuous variables."))
         outputComments(paste("Specifically: ", message))
         FAIL <- TRUE
+      }
+    } else if (("Q1" %in% names(DATA) && !is.na(DATA$Q1[i])) ||
+               ("Q3" %in% names(DATA) && !is.na(DATA$Q3[i]))) {
+      # Median/IQR row (Steve's design, 2026-08-17): quartiles present
+      # mean the MEAN column holds the MEDIAN. Both quartiles, N, and the
+      # median are required; SD/SE must be EMPTY (a row carrying both an
+      # SD and quartiles is ambiguous about what MEAN means); and the
+      # median must sit between its quartiles (non-strict - printed
+      # rounding can tie them).
+      hasQ1 <- "Q1" %in% names(DATA) && !is.na(DATA$Q1[i])
+      hasQ3 <- "Q3" %in% names(DATA) && !is.na(DATA$Q3[i])
+      if (!hasQ1 || !hasQ3)
+      {
+        outputComments(paste("Please look at line", i+1))
+        outputComments(paste(
+          "This row reports quartiles, but only one of Q1/Q3 is filled",
+          "in. A median row needs both."))
+        FAIL <- TRUE
+      } else if (is.na(DATA$N[i]) || is.na(DATA$MEAN[i]))
+      {
+        outputComments(paste("Please look at line", i+1))
+        outputComments(paste(
+          "This is a median/IQR row (Q1 and Q3 are filled in), so it",
+          "needs N and the median in the MEAN column."))
+        FAIL <- TRUE
+      } else if (!is.na(DATA$SD[i]) ||
+                 ("SE" %in% names(DATA) && !is.na(DATA$SE[i])))
+      {
+        outputComments(paste("Please look at line", i+1))
+        outputComments(paste(
+          "This row has quartiles AND an SD or SE. With Q1/Q3 filled in,",
+          "MEAN is read as the MEDIAN - remove either the quartiles or",
+          "the SD/SE so the row is unambiguous."))
+        FAIL <- TRUE
+      } else if (DATA$Q1[i] > DATA$MEAN[i] || DATA$MEAN[i] > DATA$Q3[i])
+      {
+        outputComments(paste("Please look at line", i+1))
+        outputComments(paste0(
+          "The median must lie between its quartiles: Q1 = ", DATA$Q1[i],
+          ", median = ", DATA$MEAN[i], ", Q3 = ", DATA$Q3[i], "."))
+        FAIL <- TRUE
+      } else {
+        # median printed with decimals bumps ROUND_MEAN, same as a mean
+        if (DATA$MEAN[i] %% 1 != 0)
+        {
+          digits <- nchar(sub("^.*\\.", "", as.character(DATA$MEAN[i])))
+          if (DATA$ROUND_MEAN[i] < digits) DATA$ROUND_MEAN[i] <- digits
+        }
       }
     } else {
       if (any(is.na(DATA[i, c("N", "MEAN", "SD")])))
@@ -311,10 +365,11 @@ validateData <- function(DATA) {
     outputComments("There are one or more errors in the data table. Please review the above messages to address these.")
     return(list(FAIL = TRUE))
   }
-  # Carry SE and ROUND_DISPERSION through when the input supplies them.
-  # They are optional: a spreadsheet typed by hand, or written before this
-  # change, has neither, and must still work.
-  OptionalColumns <- intersect(c("SE", "ROUND_DISPERSION"), names(DATA))
+  # Carry SE, Q1/Q3, and ROUND_DISPERSION through when the input supplies
+  # them. They are optional: a spreadsheet typed by hand, or written
+  # before these changes, has none of them, and must still work.
+  OptionalColumns <- intersect(c("SE", "Q1", "Q3", "ROUND_DISPERSION"),
+                               names(DATA))
   DATA <- DATA[,c("TRIAL", "ROW", "N", "MEAN", "SD",  "ROUND_MEAN", "ROUND_OBSERVATION", OptionalColumns, CategoryNames, MiscNames)]
   DATA <- DATA[order(DATA$TRIAL, DATA$ROW),]
   TRIALS <- unique(DATA$TRIAL)
