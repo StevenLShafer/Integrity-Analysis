@@ -207,12 +207,25 @@ app_server <- function(input, output, session) {
         r <- res$result[[1]]
         if (is.null(r) || nrow(r$data) == 0)
         {
+          # The parser's error text is written for the R console; strip
+          # the advice that means nothing inside the app (`pages=`,
+          # `layout=`, ai = "always", ocr = TRUE), and replace the
+          # uploaded temp-file path with the name the user actually chose.
+          msg <- res$error[1]
+          msg <- gsub(Filename, input$upload$name, msg, fixed = TRUE)
+          msg <- sub(" Try the `pages` or `layout` argument, or ai = \"always\"\\.",
+                     "", msg)
+          msg <- sub(" Re-run with ocr = TRUE\\.",
+                     " (a scanned image with no text layer - the parser reads text, not pictures)",
+                     msg)
           outputComments(paste0(
             "Could not extract a baseline table from ", input$upload$name,
-            ": ", res$error[1]))
+            ": ", msg))
           outputComments(paste(
-            "You can still analyze this trial by entering its table into",
-            "the Template spreadsheet (sidebar) and uploading that."))
+            "This is expected for roughly a quarter of published PDFs -",
+            "layouts vary more than any parser can. You can still analyze",
+            "this trial by entering its table into the Template",
+            "spreadsheet (sidebar) and uploading that."))
           return()
         }
 
