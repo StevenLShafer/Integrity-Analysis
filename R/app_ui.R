@@ -1,11 +1,23 @@
 # Testing Baseline RCT Values for Fraud / Error
-# August  2025 
+# August  2025
 
 ###############################
 # UI                          #
 ###############################
+#
+# PROVENANCE: was ui.R at the repository root until the package restructure
+# (phase 1, Claude Code model Claude Fable 5, 2026-08-16 — see
+# docs/package-restructure-plan.md). Two changes only:
+#   - the top-level `ui <- ...` object became the function app_ui(), so the
+#     page is built when run_app() asks for it rather than at package load
+#     (the stanpumpR pattern; a load-time object would also fail R CMD check,
+#     since building it calls shinydashboard before packages are attached).
+#   - the three static assets are referenced through the "www/" resource
+#     prefix that run_app() registers with addResourcePath(), because a
+#     packaged app has no auto-served www/ directory. The files themselves
+#     moved unchanged to inst/www/.
 
-ui <- 
+app_ui <- function()
   dashboardPage(
     title = "RCT Integrity Analysis",
     dashboardHeader(
@@ -53,8 +65,8 @@ ui <-
       ),
     dashboardBody(
       shinyjs::useShinyjs(),
-      tags$script(src = "app.js"),
-      tags$head(tags$link(href = "app.css", rel = "stylesheet")),
+      tags$script(src = "www/app.js"),
+      tags$head(tags$link(href = "www/app.css", rel = "stylesheet")),
       style = "max-height: 95vh; overflow-y: auto;" ,
       tags$head(
         tags$style(
@@ -71,7 +83,7 @@ ui <-
       ),
       fluidRow(
         img(
-          src='Table.png', align = "right", width = "100%"
+          src='www/Table.png', align = "right", width = "100%"
         ),
         style = 'border-bottom: 1px solid; padding-left: 5%; padding-right: 5%; padding-bottom: 2%'
       ),  

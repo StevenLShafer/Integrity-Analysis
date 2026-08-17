@@ -3,6 +3,16 @@
 # Server                      #
 ###############################
 #
+# PROVENANCE: was server.R at the repository root until the package
+# restructure (phase 1, Claude Code model Claude Fable 5, 2026-08-16 — see
+# docs/package-restructure-plan.md). Two changes only:
+#   - `server <-` became `app_server <-` (the stanpumpR naming; app.R no
+#     longer relies on Shiny finding an object literally named "server").
+#   - the three files served by download handlers (IntegrityAnalysis.pdf,
+#     Template.xlsx, Example.xlsx) are located with system.file(), because
+#     they now live in inst/extdata and install with the package; a deployed
+#     app has no repository working directory to resolve bare filenames in.
+#
 # PROVENANCE: Bug-fix pass by Claude Code (model: Claude Fable 5), 2026-08-14,
 # on the 2025-09-01 original. Each fix is commented in place with "FIX:".
 # All fixes verified by running the app locally against Example.xlsx
@@ -21,7 +31,7 @@
 # Cutoff for number of categories (probably 5)
 
 
-server <- function(input, output, session) {
+app_server <- function(input, output, session) {
   reactiveData <- reactiveVal()
   reactiveDataValidated <- reactiveVal()
   reactiveResults <- reactiveVal()
@@ -759,7 +769,8 @@ server <- function(input, output, session) {
       "IntegrityAnalysis.pdf"
     },
     content = function(file) {
-      file.copy("IntegrityAnalysis.pdf", file)
+      file.copy(system.file("extdata", "IntegrityAnalysis.pdf",
+                            package = "IntegrityAnalysis"), file)
     })
   
   output$template <- downloadHandler(
@@ -767,7 +778,8 @@ server <- function(input, output, session) {
       "Template for Integrity Analysis.xlsx"
     },
     content = function(file) {
-      write.xlsx(read.xlsx("Template.xlsx"), file)
+      write.xlsx(read.xlsx(system.file("extdata", "Template.xlsx",
+                                       package = "IntegrityAnalysis")), file)
     })
 
     
@@ -776,7 +788,8 @@ server <- function(input, output, session) {
       "Example for Integrity Analysis.xlsx"
     },
     content = function(file) {
-      write.xlsx(read.xlsx("Example.xlsx"), file)
+      write.xlsx(read.xlsx(system.file("extdata", "Example.xlsx",
+                                       package = "IntegrityAnalysis")), file)
     })
 
   observeEvent(input$stop, {

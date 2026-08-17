@@ -1,0 +1,41 @@
+Package: IntegrityAnalysis
+Title: Carlisle-Shafer Monte Carlo Analysis of Baseline Data in Randomized Controlled Trials
+Version: 0.1.0
+Authors@R:
+    person(given = "Steven",
+           family = "Shafer",
+           role = c("aut", "cre"),
+           email = "steven.shafer@stanford.edu",
+           comment = c(ORCID = "0000-0002-0289-7793"))
+Description: A Shiny application implementing the Carlisle-Shafer Monte Carlo
+    analysis of baseline data in randomized controlled trials, used in
+    editorial screening for fabricated data. Continuous baseline variables are
+    tested by simulating rounded group means under the null hypothesis of
+    random sampling; categorical variables by simulated chi-square; per-row
+    p-values are combined with Stouffer's method. References: Carlisle 2012,
+    Carlisle et al. 2015, Carlisle 2017 (Anaesthesia).
+License: MIT + file LICENSE
+Depends:
+  R (>= 4.1)
+Imports:
+  bslib,
+  dqrng,
+  foreach,
+  MBESS,
+  openxlsx,
+  readxl,
+  Rfast,
+  shiny,
+  shinydashboard,
+  shinyjs,
+  shinyWidgets
+Suggests:
+    remotes,
+    rsconnect,
+    testthat
+Encoding: UTF-8
+Collate:
+  app_globals.R
+  app_ui.R
+  app_server.R
+  app_run.R
