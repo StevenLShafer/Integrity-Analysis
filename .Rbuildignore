@@ -6,6 +6,8 @@
 ^docs$
 ^handoff$
 ^CLAUDE\.md$
+^AGENTS\.md$
+^GEMINI\.md$
 ^ISSUES\.md$
 ^README\.md$
 ^LICENSE\.md$

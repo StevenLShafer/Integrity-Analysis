@@ -382,6 +382,42 @@ stanpumpR — confirm).
 
 ---
 
+## 11. Live UI feedback while the Monte Carlo runs
+
+Steve's request (2026-08-16). The p-value calculation can take a very long
+time, and the user needs feedback while it runs. This is genuinely hard in
+Shiny: the server is single-threaded, so while `P_Calc()` computes, the UI
+is locked — no reactive flush, no log refresh, no button response.
+
+What exists today, and its limits: `shiny::Progress` ticks once per
+**trial** (its `$set()` pushes straight to the websocket, bypassing the
+flush, which is why it works at all), and `bslib::input_task_button` shows
+a busy state — but within one long trial nothing moves, the comments log
+(`invalidateLater(1000)`) freezes, and nothing can be cancelled. Dean's
+PR #2 (full-page spinner) is another symptom of the same itch; a spinner
+still cannot update *during* the computation.
+
+The real fix is to take the computation **off the main thread**:
+
+- **`shiny::ExtendedTask`** (Shiny ≥ 1.8.1) + {promises}/{future} is the
+  designed-for answer, and `input_task_button` — already in the app — is
+  its intended companion: the button binds to the task, the UI stays live,
+  per-trial results can stream into the log as they complete, and a Cancel
+  button becomes possible.
+- A worker process (callr/future multisession) reporting progress through a
+  file or socket the main session polls with `invalidateLater` is the
+  portable fallback.
+- Within-trial granularity: P_Calc's row loop can report progress per ROW
+  (pass a callback) once progress can actually reach the client.
+
+Do together with issue 5 (optimise the Monte Carlo): parallelising trials
+with {future} and moving the loop off the main thread are the same
+plumbing, and should be designed once. Test cancellation and the
+two-users-at-once case on shinyapps.io, where worker processes are billed
+compute.
+
+---
+
 ## Closed
 
 *(nothing yet)*
