@@ -181,6 +181,31 @@ compared against the repaired `Carlisle Data with PMIDs.xlsx`:
   trials. The wide file's formula columns (`p.value 2-sided`, `Variables`)
   have no cached values and read as NA from R — recompute, don't read.
 
+**FULL VALIDATION — 2026-08-17, VALIDATED.** All 5,080 joinable trials
+(100% join with the lookup; zero rows dropped), m = 15,000, mid-p build
+(PR #8): **r = 0.991 against Carlisle's stored p.value, median |diff|
+0.0095, 92% within 0.05, alarm-zone (folded p < 0.05) concordance 97.4%**
+(734 flagged by both, 75 ours-only, 55 his-only). The residual is
+consistent with two independent Monte Carlos. Two artifact families
+explain most of the worst tail, neither a method problem:
+
+- **A&A numbering drift in the One Sheet**: its Anesthesia & Analgesia
+  sequence skips the wide file's trial ~1234 and renumbers, so one-sheet
+  trials ≥ 1235 correspond to wide trial t+1 (five more trials missing at
+  the end account for the 1,282 vs 1,288 count). Correcting the offset
+  realigned 49 trials from median |diff| ≈ 0.24 to ≈ 0.011. The One Sheet
+  file itself has not been repaired — do that (or always apply the offset)
+  before using it as a Carlisle ground-truth again.
+- **The known his-p = 1 artifact** (12 of the 124 trials still off by
+  > 0.10): a variable p of exactly 1 maps to z = +∞ (see the with-PMIDs
+  repair notes); Steve's adjudication of those 33 rows is still pending.
+  The other ~112 outliers are unadjudicated — most look like Monte Carlo
+  extremes and per-variable count mismatches; the sorted list is
+  `carlisle_final_validation.csv` (session scratchpad, also sent to Steve).
+
+Remaining before closing: merge PR #8 (the mid-p convention the validation
+ran under), and decide how far to adjudicate the 112 unexplained outliers.
+
 ---
 
 ## 4. Build a comprehensive test suite
