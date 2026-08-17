@@ -106,9 +106,15 @@ app_ui <- function(testNote = NULL)
       fluidRow(
         column(
           12,
-          HTML("<br>Select data entry spreadsheet (csv, xls, or xlsx) or article PDF<br>"),
-          fileInput("upload", NULL,
+          HTML(paste0(
+            "<br>Select one or more data entry spreadsheets (csv, xls, ",
+            "xlsx) and/or article PDFs - files combine into one table, ",
+            "distinguished by trial - or start with an empty table and ",
+            "type the data in<br>")),
+          fileInput("upload", NULL, multiple = TRUE,
                     accept = c(".csv", ".xls", ".xlsx", ".pdf")),
+          actionButton("blank", "Start With an Empty Table"),
+          HTML("<br><br>"),
           # The editable pre-analysis grid (Steve's request, 2026-08-17):
           # whatever the upload produced - spreadsheet rows or a PDF
           # extraction - is shown here for inspection and editing BEFORE

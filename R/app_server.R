@@ -51,8 +51,9 @@ app_server <- function(input, output, session) {
   TRIALS <- NULL         # unique trial identifiers in DATA
   ColumnNames <- NULL    # cleaned-up column names of DATA
   CategoryNames <- NULL  # columns holding categorical (count) data
-  pdfResult <- NULL      # ParsePDFTable from a PDF upload, for the
-                         # "Download Extracted Table" round trip
+  skipValidation <- FALSE  # one-shot: the blank-table starter sets this so
+                           # eight empty rows are not validated (and flagged
+                           # line by line) before the user has typed anything
 
   # FIX: removed stopImplicitCluster() and the commented-out doParallel
   # cluster setup. The row loop in P_Calc runs sequentially (%do%), so no
@@ -106,7 +107,14 @@ app_server <- function(input, output, session) {
       # cap the widget height; rhandsontable scrolls and virtualizes rows
       height = min(400, 60 + 24 * nrow(d)),
       rowHeaders = TRUE) |>
-      rhandsontable::hot_table(highlightRow = TRUE, highlightCol = TRUE)
+      rhandsontable::hot_table(highlightRow = TRUE, highlightCol = TRUE) |>
+      # Right-click menu for inserting and deleting ROWS (Steve's request,
+      # 2026-08-17 - essential for the blank-entry mode). Column editing
+      # stays off: handsontable's added columns cannot be NAMED from the
+      # grid, and column names are the data model here (category columns
+      # are recognized by being extra named integer columns).
+      rhandsontable::hot_context_menu(allowRowEdit = TRUE,
+                                      allowColEdit = FALSE)
     # Column display formats (Steve, 2026-08-17): rhandsontable's numeric
     # default shows two decimals, which made counts and the rounding
     # columns read as "25.00". Whole-number columns display as integers;
@@ -147,6 +155,22 @@ app_server <- function(input, output, session) {
     # testable without faking the widget's wire format.
     edited <- if (is.data.frame(input$dataGrid)) input$dataGrid
               else rhandsontable::hot_to_r(input$dataGrid)
+    # Rows with no content at all are dropped silently - the blank-entry
+    # starter provides eight empty rows, and unused ones are not data
+    # entry errors.
+    keep <- apply(edited, 1, function(r)
+      any(!is.na(r) & trimws(as.character(r)) != ""))
+    edited <- edited[keep, , drop = FALSE]
+    if (nrow(edited) == 0) {
+      outputComments("The table has no data yet.")
+      return()
+    }
+    # A TRIAL column left entirely blank means a single trial - the same
+    # convention as a spreadsheet with no TRIAL column at all.
+    if ("TRIAL" %in% names(edited) &&
+        all(is.na(edited$TRIAL) |
+            trimws(as.character(edited$TRIAL)) == ""))
+      edited$TRIAL <- 1
     # A fresh validation pass gets a fresh log, and any previous results
     # are discarded - the edited table is now the data of record.
     commentsLog(NULL)
@@ -156,6 +180,37 @@ app_server <- function(input, output, session) {
     reactiveDataValidated(NULL)
     output$GoButton <- NULL
     reactiveData(edited)
+  })
+
+  # Blank-table entry (Steve's request, 2026-08-17): start from nothing
+  # and type everything in the grid. Eight empty rows in the canonical
+  # column layout, plus three placeholder category columns (leave unused
+  # ones blank - fully empty rows and all-NA columns are harmless).
+  # Validation is skipped for this initial empty frame (skipValidation);
+  # it runs when the user clicks Apply Edits & Revalidate.
+  observeEvent(input$blank, {
+    reactiveResults(NULL)
+    reactiveDone(FALSE)
+    commentsLog(NULL)
+    OUTPUT <<- NULL
+    reactiveDataValidated(NULL)
+    output$GoButton <- NULL
+    output$downloadButton <- NULL
+    blank <- data.frame(
+      TRIAL = rep(NA_character_, 8), ROW = NA_character_,
+      N = NA_real_, MEAN = NA_real_, SD = NA_real_, SE = NA_real_,
+      ROUND_MEAN = NA_real_, ROUND_DISPERSION = NA_real_,
+      ROUND_OBSERVATION = NA_real_,
+      CAT1 = NA_real_, CAT2 = NA_real_, CAT3 = NA_real_,
+      stringsAsFactors = FALSE)
+    skipValidation <<- TRUE
+    DATA <<- blank
+    reactiveData(blank)
+    outputComments(paste(
+      "Empty table ready. Type your data into the grid (right-click to",
+      "add or delete rows); CAT1-CAT3 are placeholders for categorical",
+      "count columns - leave unused ones blank. When done, click Apply",
+      "Edits & Revalidate."))
   })
 
   ###########################################################
@@ -237,124 +292,152 @@ app_server <- function(input, output, session) {
       reactiveDataValidated(NULL)
       output$GoButton <- NULL
       output$downloadButton <- NULL
-      pdfResult <<- NULL
-      output$extractedButton <- NULL
 
-      Filename <- input$upload$datapath
-      ext <- tolower(tools::file_ext(Filename))
+      # Multi-file upload (Steve's request, 2026-08-17): any mix of
+      # csv/xls/xlsx/PDF in one selection. Every file becomes a data
+      # frame; the frames concatenate into ONE table distinguished by the
+      # TRIAL column, which is what P_Calc analyzes trial by trial with
+      # no cross-talk.
+      #
+      # TRIAL bookkeeping across files:
+      #   - a file without a TRIAL column gets its own file name (sans
+      #     extension) as the trial - the single-file "TRIAL <- 1" rule
+      #     does not survive two files;
+      #   - if the SAME trial value appears in more than one file (two
+      #     spreadsheets both numbered 1, 2, ...), every trial in the
+      #     later file is prefixed "filename: " so nothing silently
+      #     merges into one trial.
+      #
+      # PDFs go through parseBaselineTableFiles() in ONE call - a
+      # subprocess per file with an OS timeout (~2% of real PDFs hang
+      # poppler; an in-process hang would take this worker down for every
+      # user), deterministic engine only (ai = "never": manuscripts are
+      # confidential, verdicts must be reproducible). A failed parse is
+      # reported per file and the rest continue.
+      files <- input$upload
+      files$ext <- tolower(tools::file_ext(files$name))
+      files$stem <- tools::file_path_sans_ext(files$name)
 
-      # Switch statement started to fail parsing... ????
-      if (!ext %in% c("csv", "xlsx", "xls", "pdf"))
-      {
-        outputComments(
-          paste0(".", ext, " is not a supported file type.")  # FIX: spacing
-        )
-        return()
+      bad <- !files$ext %in% c("csv", "xlsx", "xls", "pdf")
+      for (nm in files$name[bad])
+        outputComments(paste0(nm, " is not a supported file type."))
+      files <- files[!bad, , drop = FALSE]
+      if (nrow(files) == 0) return()
+
+      frames <- list()
+
+      readSheet <- function(path, ext) {
+        if (ext == "csv")  return(read.csv(path))
+        if (ext == "xlsx") return(read.xlsx(path))
+        # FIX (from the single-file code): read.xl() never existed;
+        # readxl::read_excel() is the reader, as.data.frame() because a
+        # tibble's [,col] semantics break the column handling downstream.
+        as.data.frame(read_excel(path))
+      }
+      for (i in which(files$ext != "pdf")) {
+        d <- tryCatch(readSheet(files$datapath[i], files$ext[i]),
+                      error = function(e) NULL)
+        if (is.null(d) || nrow(d) == 0) {
+          outputComments(paste0("Could not read ", files$name[i], "."))
+          next
+        }
+        outputComments(paste0("Read ", files$name[i], ": ", nrow(d),
+                              " row(s)."))
+        frames[[length(frames) + 1]] <-
+          list(stem = files$stem[i], data = d)
       }
 
-      # PDF upload (Steve's request, 2026-08-17): parse the article's
-      # baseline table and feed it into the SAME validation pipeline the
-      # spreadsheets use. Design constraints, all deliberate:
-      #   - Deterministic engine only (ai = "never"): manuscripts under
-      #     review are confidential, so nothing may leave the server, and
-      #     the same PDF must always yield the same verdict.
-      #   - Parsed in a SUBPROCESS with an OS timeout, never in-process:
-      #     ~2% of real journal PDFs hang poppler indefinitely, R cannot
-      #     interrupt it, and an in-process hang would take this worker
-      #     down for every connected user.
-      #   - A partial extraction is a round trip, not a dead end: the
-      #     extracted table is offered as a download in the app's own
-      #     input layout, so the user fills the gaps the printed table
-      #     did not provide (most often arm N) and re-uploads the
-      #     spreadsheet. Expectation from the corpus (see
-      #     corpus/ParseOutcomes.csv): roughly a third of PDFs yield a
-      #     fully analysable trial; the spreadsheet path is the reliable
-      #     one and this is the convenient one.
-      if (ext == "pdf")
-      {
+      pdfIdx <- which(files$ext == "pdf")
+      if (length(pdfIdx) > 0) {
         progress <- shiny::Progress$new(session, style = "notification")
-        progress$set(message = "Parsing PDF ",
-                     detail = "deterministic engine, up to 60 s")
-        res <- parseBaselineTableFiles(Filename, ai = "never",
-                                       timeout = 60, quiet = TRUE)
+        progress$set(message = "Parsing PDF(s) ",
+                     detail = paste0(length(pdfIdx),
+                                     " file(s), up to 60 s each"))
+        res <- parseBaselineTableFiles(files$datapath[pdfIdx],
+                                       ai = "never", timeout = 60,
+                                       quiet = TRUE)
         progress$close()
-        r <- res$result[[1]]
-        if (is.null(r) || nrow(r$data) == 0)
-        {
-          # The parser's error text is written for the R console; strip
-          # the advice that means nothing inside the app (`pages=`,
-          # `layout=`, ai = "always", ocr = TRUE), and replace the
-          # uploaded temp-file path with the name the user actually chose.
-          msg <- res$error[1]
-          msg <- gsub(Filename, input$upload$name, msg, fixed = TRUE)
-          msg <- sub(" Try the `pages` or `layout` argument, or ai = \"always\"\\.",
-                     "", msg)
-          msg <- sub(" Re-run with ocr = TRUE\\.",
-                     " (a scanned image with no text layer - the parser reads text, not pictures)",
-                     msg)
+        for (k in seq_along(pdfIdx)) {
+          i <- pdfIdx[k]
+          r <- res$result[[k]]
+          if (is.null(r) || nrow(r$data) == 0) {
+            # Console advice (`pages=`, ai = "always", ocr = TRUE) means
+            # nothing inside the app; translate, and show the user's own
+            # file name rather than the upload temp path.
+            msg <- res$error[k]
+            msg <- gsub(files$datapath[i], files$name[i], msg, fixed = TRUE)
+            msg <- sub(" Try the `pages` or `layout` argument, or ai = \"always\"\\.",
+                       "", msg)
+            msg <- sub(" Re-run with ocr = TRUE\\.",
+                       " (a scanned image with no text layer - the parser reads text, not pictures)",
+                       msg)
+            outputComments(paste0(
+              "Could not extract a baseline table from ", files$name[i],
+              ": ", msg))
+            next
+          }
           outputComments(paste0(
-            "Could not extract a baseline table from ", input$upload$name,
-            ": ", msg))
-          outputComments(paste(
-            "This is expected for roughly a quarter of published PDFs -",
-            "layouts vary more than any parser can. You can still analyze",
-            "this trial by entering its table into the Template",
-            "spreadsheet (sidebar) and uploading that."))
-          return()
+            "Extracted the baseline table from ", files$name[i],
+            ": table page ", res$page[k], ", ", res$arms[k], " arm(s) (",
+            res$armsWithN[k], " with N), ", res$variables[k],
+            " variable(s), ", res$continuous[k], " with mean and SD."))
+          if (nrow(r$skipped) > 0) {
+            outputComments(paste0(
+              nrow(r$skipped), " table line(s) could not be used:"))
+            for (s in seq_len(nrow(r$skipped)))
+              outputComments(paste0("- ", r$skipped$label[s], ": ",
+                                    r$skipped$reason[s]))
+          }
+          d <- r$data
+          d$TRIAL <- files$stem[i]   # opaque temp name -> the user's name
+          frames[[length(frames) + 1]] <-
+            list(stem = files$stem[i], data = d)
         }
+      }
 
-        # The parse narrative, then every unusable line and why - the
-        # user should never have to guess what the parser did.
-        outputComments(paste0(
-          "Extracted the baseline table from ", input$upload$name,
-          ": table page ", res$page[1], ", ", res$arms[1], " arm(s) (",
-          res$armsWithN[1], " with N), ", res$variables[1],
-          " variable(s), ", res$continuous[1], " with mean and SD."))
-        if (nrow(r$skipped) > 0)
-        {
+      if (length(frames) == 0) {
+        outputComments(paste(
+          "No file produced a usable table. You can enter the data by",
+          "hand: use Start With an Empty Table, or fill in the Template",
+          "spreadsheet (sidebar) and upload it."))
+        return()
+      }
+
+      # TRIAL assignment and cross-file disambiguation.
+      seen <- character(0)
+      for (j in seq_along(frames)) {
+        d <- frames[[j]]$data
+        tcol <- grep("TRIAL", toupper(trimws(names(d))))
+        if (length(tcol) == 0) {
+          d$TRIAL <- frames[[j]]$stem
+        } else {
+          names(d)[tcol[1]] <- "TRIAL"
+          if (all(is.na(d$TRIAL))) d$TRIAL <- frames[[j]]$stem
+        }
+        if (any(as.character(unique(d$TRIAL)) %in% seen)) {
+          d$TRIAL <- paste0(frames[[j]]$stem, ": ", d$TRIAL)
           outputComments(paste0(
-            nrow(r$skipped), " table line(s) could not be used:"))
-          for (k in seq_len(nrow(r$skipped)))
-            outputComments(paste0("- ", r$skipped$label[k], ": ",
-                                  r$skipped$reason[k]))
+            "Trial identifiers in ", frames[[j]]$stem,
+            " duplicate an earlier file; prefixed with the file name."))
         }
-
-        # The uploaded temp file has an opaque name; label the trial with
-        # the real file name the user chose.
-        r$data$TRIAL <- tools::file_path_sans_ext(input$upload$name)
-        pdfResult <<- r
-        output$extractedButton <- renderUI({
-          downloadButton("extracted", "Download Extracted Table")
-        })
-
-        DATA <<- r$data
-        reactiveData(DATA)
-        return()
+        seen <- c(seen, as.character(unique(d$TRIAL)))
+        frames[[j]]$data <- d
       }
 
-      if (ext == "csv")
-      {
-        DATA <<- read.csv(Filename)
-        reactiveData(DATA)
-        return()
-      }
-      if (ext == "xlsx")
-      {
-        DATA <<- read.xlsx(Filename)
-        reactiveData(DATA)
-        return()
-      }
-      if (ext == "xls")
-      {
-        # FIX: was read.xl(), which does not exist in any loaded package -
-        # every .xls upload crashed the session. readxl::read_excel() is the
-        # correct reader; as.data.frame() converts its tibble return value,
-        # whose different [,col] subsetting semantics would otherwise break
-        # the column handling downstream.
-        DATA <<- as.data.frame(read_excel(Filename))
-        reactiveData(DATA)
-        return()
-      }
+      # Concatenate on the union of columns (different files carry
+      # different category columns; absent columns fill with NA, which is
+      # exactly what the category rules expect).
+      allCols <- unique(unlist(lapply(frames, function(f) names(f$data))))
+      DATA <<- do.call(rbind, lapply(frames, function(f) {
+        d <- f$data
+        for (nm in setdiff(allCols, names(d))) d[[nm]] <- NA
+        d[, allCols, drop = FALSE]
+      }))
+      if (length(frames) > 1)
+        outputComments(paste0("Combined ", length(frames), " file(s): ",
+                              nrow(DATA), " rows, ",
+                              length(unique(DATA$TRIAL)), " trial(s)."))
+      reactiveData(DATA)
     }
   )
 
@@ -366,6 +449,15 @@ app_server <- function(input, output, session) {
       DATA <- reactiveData()
       if (is.null(DATA))
       {
+        return()
+      }
+
+      # The blank-table starter shows an empty grid to type into;
+      # validating eight empty rows would flag every one of them.
+      # One-shot skip: validation resumes on Apply Edits & Revalidate.
+      if (skipValidation)
+      {
+        skipValidation <<- FALSE
         return()
       }
 
@@ -446,16 +538,24 @@ app_server <- function(input, output, session) {
       write.xlsx(x, file)
     })
 
-  # The extracted-table round trip: writeIntegrityTemplate() emits the
-  # app's own input layout (plus Provenance and Skipped sheets after the
-  # data; the app reads only the first sheet on re-upload).
+  # Download the current table (generalized 2026-08-17 from the single-PDF
+  # "Download Extracted Table": with multiple files and blank-entry there
+  # is one combined table, and THAT is what the user wants to save - the
+  # round trip for a partial PDF extraction, a checkpoint for hand-typed
+  # data. Reflects the table as of the last upload / Apply Edits; the
+  # file is valid input for a later upload.
+  output$extractedButton <- renderUI({
+    if (is.null(reactiveData())) return(NULL)
+    tagList(downloadButton("extracted", "Download Table"),
+            HTML("<br><br>"))
+  })
   output$extracted <- downloadHandler(
     filename = function() {
-      paste0("Extracted ",
-             tools::file_path_sans_ext(input$upload$name), ".xlsx")
+      paste0("Integrity Data.",
+             format(Sys.time(), format = "%y%m%d-%H%M%S"), ".xlsx")
     },
     content = function(file) {
-      writeIntegrityTemplate(pdfResult, file)
+      write.xlsx(reactiveData(), file, keepNA = FALSE)
     })
 
   output$documentation <- downloadHandler(
