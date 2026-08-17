@@ -16,8 +16,12 @@
 #     prefix that run_app() registers with addResourcePath(), because a
 #     packaged app has no auto-served www/ directory. The files themselves
 #     moved unchanged to inst/www/.
+# Phase 2 (same date) added the testNote banner: Steve wants a PR test
+# deployment to SAY, in the app itself, which PR it is and what to test,
+# so triage never requires opening GitHub. When testNote is NULL (the
+# production app.R) the page is built exactly as before.
 
-app_ui <- function()
+app_ui <- function(testNote = NULL)
   dashboardPage(
     title = "RCT Integrity Analysis",
     dashboardHeader(
@@ -64,6 +68,18 @@ app_ui <- function()
         )
       ),
     dashboardBody(
+      # Visible only on PR test deployments (run_app(testNote = ...)):
+      # a banner naming the PR and what to test, so the tester never has
+      # to inspect the PR itself to know what to look for.
+      if (!is.null(testNote))
+        fluidRow(
+          div(
+            strong("TEST DEPLOYMENT — "), testNote,
+            style = paste0(
+              "background-color: #f39c12; color: #000; padding: 8px 5%; ",
+              "font-size: 15px; border-bottom: 2px solid #c87f0a;")
+          )
+        ),
       shinyjs::useShinyjs(),
       tags$script(src = "www/app.js"),
       tags$head(tags$link(href = "www/app.css", rel = "stylesheet")),

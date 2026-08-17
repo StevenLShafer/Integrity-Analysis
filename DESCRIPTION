@@ -36,6 +36,11 @@ Suggests:
 Encoding: UTF-8
 Collate:
   app_globals.R
+  sumz.R
+  outputComments.R
+  validateData.R
+  P_Calc.R
   app_ui.R
   app_server.R
   app_run.R
+Config/roxygen2/version: 8.1.0
