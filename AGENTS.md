@@ -42,8 +42,13 @@ MEAN → `ROUND_MEAN`, "OBS" → `ROUND_OBSERVATION`, "TRIAL", "ROW"/"GROUP",
 "NUMBER" → N) → per-line validation (continuous rows need N/MEAN/SD;
 category rows must be numeric, integer-valued, with at least one NA in the
 column) → per-trial `P_Calc()`: closed-form weighted means, Monte Carlo of
-rounded simulated means (continuous) or simulated chi-square
-(categorical), **mid-p** ties, rows combined with Stouffer's `sumz()`. A
+rounded simulated means (continuous) or simulated chi-square under fixed
+margins (categorical), **mid-p** ties, rows combined with Stouffer's
+`sumz()` into a **single one-sided p toward excessive homogeneity**
+(issue 6: small p = data more similar across arms than random sampling
+explains — the fraud signal; heterogeneity is deliberately not reported,
+and the categorical branch takes the lower tail, not `chisq.test`'s
+upper tail). A
 failed PDF extraction is a round trip: the partial table is offered as a
 download in the app's own input layout. Local hand-test PDFs, one per
 parsing challenge: `corpus/` (see its README).
