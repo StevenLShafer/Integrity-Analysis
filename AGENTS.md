@@ -97,6 +97,11 @@ Stouffer's `sumz()`.
   from `main`** — never stack a PR on another PR's branch; each PR is
   devoted to **one specific issue**, so its testing scope is obvious; and
   the PR description **opens with a plain statement of the change made**.
+- `main` is **protected** (2026-08-17): force-pushes and branch deletion
+  are blocked for everyone. Admin (Steve's account) can still push
+  ordinary commits directly — used for documentation-only changes; code
+  goes through PRs. If a push is rejected, do not try to work around the
+  protection; rebase onto the current `main` and push normally.
 - No Bioconductor-dependent packages (the shinyapps.io image build breaks
   on them — that is why `metap` was replaced by a local `sumz()`).
 - Keep secrets and per-user data out of `outputComments()` logs and out of

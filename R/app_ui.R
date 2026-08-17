@@ -106,15 +106,23 @@ app_ui <- function(testNote = NULL)
       fluidRow(
         column(
           12,
-          HTML("<br>Select data entry spreadsheet (csv, xls, or xlsx)<br>"),
-          fileInput("upload", NULL, accept = c(".csv", ".xls", ".xlsx")),
+          HTML("<br>Select data entry spreadsheet (csv, xls, or xlsx) or article PDF<br>"),
+          fileInput("upload", NULL,
+                    accept = c(".csv", ".xls", ".xlsx", ".pdf")),
           # The editable pre-analysis grid (Steve's request, 2026-08-17):
-          # whatever the upload produced is shown here for inspection and
-          # editing BEFORE any statistics run. Edits take effect through
-          # the "Apply Edits & Revalidate" button below the grid.
+          # whatever the upload produced - spreadsheet rows or a PDF
+          # extraction - is shown here for inspection and editing BEFORE
+          # any statistics run. Edits take effect through the "Apply
+          # Edits & Revalidate" button below the grid; for a parsed PDF
+          # this is where a missing arm N gets filled in directly.
           rhandsontable::rHandsontableOutput("dataGrid"),
           uiOutput("validateButton"),
           uiOutput("GoButton"),
+          # Appears after a PDF parse: the extracted table as a spreadsheet,
+          # so a partial extraction is a round trip (fill the gaps, re-upload
+          # the spreadsheet) rather than a dead end - the failure contract
+          # from ISSUES.md issue 1.
+          uiOutput("extractedButton"),
           uiOutput("logContent"),
           uiOutput("downloadButton")
         )
