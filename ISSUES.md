@@ -413,6 +413,20 @@ a merge:
 **Do this after issue 3** (validation against Carlisle 2017), so the analysis
 side is known-good before the parsing side lands on top of it.
 
+**Status 2026-08-17: DONE (PR pending merge).** Issue 3 validated the
+analysis side (r = 0.991 against Carlisle), then the fold-in landed: the 9
+R files (as 8 parser files + a module doc), the full testthat suite (295
+assertions, passing in the new home), and the architecture docs
+(`docs/parsepdf-architecture.*`). The superseded in-repo
+`parseCovariateTable.R` / `testParseCovariateTable.R` were removed. New
+with the fold-in, at Steve's request: the **parser optimization loop** —
+`corpus/ParseOutcomes.csv` (master sheet: one row per corpus PDF, binary
+parsed/not-parsed outcome, and a comments column giving the steps taken or
+the failure point), `corpus/buildParseOutcomes.R` (resumable regenerator),
+`corpus/README.md`, and an AGENTS.md section addressed directly to the
+LLMs that will revisit the parser every few months. The ParsePDF
+repository is retired (history preserved there).
+
 ---
 
 ## 10. Restructure the repository as an R package (stanpumpR model)

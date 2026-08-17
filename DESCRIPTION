@@ -21,18 +21,28 @@ Imports:
   bslib,
   dqrng,
   foreach,
+  httr2,
+  jsonlite,
   MBESS,
   openxlsx,
+  pdftools,
   readxl,
   Rfast,
   shiny,
   shinydashboard,
   shinyjs,
-  shinyWidgets
+  shinyWidgets,
+  stats,
+  tools,
+  utils
 Suggests:
+    graphics,
+    grDevices,
     remotes,
     rsconnect,
-    testthat
+    tesseract,
+    testthat (>= 3.0.0)
+Config/testthat/edition: 3
 Encoding: UTF-8
 Collate:
   app_globals.R
@@ -43,4 +53,13 @@ Collate:
   app_ui.R
   app_server.R
   app_run.R
+  parsePDF-module.R
+  tokenize.R
+  pageLayout.R
+  utils.R
+  parseBaselineTableHeuristics.R
+  aiFallback.R
+  parseBaselineTable.R
+  parseBaselineTableFiles.R
+  writeIntegrityTemplate.R
 Config/roxygen2/version: 8.1.0
