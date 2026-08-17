@@ -1,4 +1,3 @@
-# Repository files that are not part of the installable package.
 ^\.github$
 ^.*\.Rproj$
 ^\.Rproj\.user$
@@ -10,8 +9,6 @@
 ^ISSUES\.md$
 ^README\.md$
 ^LICENSE\.md$
-# Working data and superseded local copies (untracked, but belt and braces:
-# the Carlisle corpus spreadsheets must never ship in the bundle).
 ^.*Carlisle.*\.xlsx$
 ^One Sheet.*\.xlsx$
 ^TestPapers$
