@@ -16,6 +16,7 @@ concrete failures in hand.
   | Column | Meaning |
   |---|---|
   | `PDF` | path relative to the corpus root (journal/year/file) |
+  | `PMID` | PubMed ID where known (79.7%): from the filename for `PMID_<n>.pdf` files, else from `pmid_map.csv` — the committed lookup holding PMIDs recovered by OCR of printed citation lines (scanned EJA papers). Blank means no PMID has ever been matched for that file |
   | `OUTCOME` | `successfully parsed` / `not successfully parsed` — did the **deterministic** engine return a baseline table (AI fallback never used here, so the sheet measures exactly the code in `R/`) |
   | `COMMENTS` | success: the steps (table page found, layout, arms and how many carry an N, lines → variables, continuous rows, skipped lines, runtime). Failure: **where** the process stopped (table-page identification, or parsing after the page was found) and the error |
   | `PAGE … SECONDS` | the same diagnostics as raw columns, so analyses need not parse `COMMENTS` |
