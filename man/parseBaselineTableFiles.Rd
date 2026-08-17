@@ -14,45 +14,45 @@ parseBaselineTableFiles(
 )
 }
 \arguments{
-\item{files}{A directory (every `.pdf` under it is parsed, recursively) or
+\item{files}{A directory (every \code{.pdf} under it is parsed, recursively) or
 a character vector of PDF paths.}
 
 \item{outputDir}{If given, each successful parse is also written there as
-`<file>.xlsx` by [writeIntegrityTemplate()]. Created if missing.}
+\verb{<file>.xlsx} by \code{\link[=writeIntegrityTemplate]{writeIntegrityTemplate()}}. Created if missing.}
 
 \item{timeout}{Seconds allowed per file before its process is killed.}
 
-\item{ai}{Passed to [parseBaselineTable()]. Defaults to `"never"` - see
+\item{ai}{Passed to \code{\link[=parseBaselineTable]{parseBaselineTable()}}. Defaults to \code{"never"} - see
 Details.}
 
 \item{quiet}{Suppress per-file progress messages.}
 
-\item{...}{Further arguments for [parseBaselineTable()], e.g.
-`roundObsDelta` or `layout`.}
+\item{...}{Further arguments for \code{\link[=parseBaselineTable]{parseBaselineTable()}}, e.g.
+\code{roundObsDelta} or \code{layout}.}
 }
 \value{
-A data frame with one row per file: `file`, `ok`, `error`,
-  `seconds`, `page`, `layout`, `arms`, `armsWithN`, `lines`, `variables`,
-  `continuous`, `skipped`, `engine`, and `result` - a list column holding
-  each `ParsePDFTable`, or `NULL` where parsing failed.
+A data frame with one row per file: \code{file}, \code{ok}, \code{error},
+\code{seconds}, \code{page}, \code{layout}, \code{arms}, \code{armsWithN}, \code{lines}, \code{variables},
+\code{continuous}, \code{skipped}, \code{engine}, and \code{result} - a list column holding
+each \code{ParsePDFTable}, or \code{NULL} where parsing failed.
 }
 \description{
-Runs [parseBaselineTable()] over many PDFs and returns one row per file
+Runs \code{\link[=parseBaselineTable]{parseBaselineTable()}} over many PDFs and returns one row per file
 describing what happened, with the parsed table itself kept in a list
 column.
 }
 \details{
-Each PDF is parsed in a **separate R process** with a timeout. That is not
+Each PDF is parsed in a \strong{separate R process} with a timeout. That is not
 defensive programming for its own sake: a malformed PDF can hang poppler
-indefinitely, and because the hang is inside C code, `setTimeLimit()` and
-`tryCatch()` cannot end it. A file that hangs or crashes is recorded with
-`ok = FALSE` and the run carries on. The cost is a process launch per file,
+indefinitely, and because the hang is inside C code, \code{setTimeLimit()} and
+\code{tryCatch()} cannot end it. A file that hangs or crashes is recorded with
+\code{ok = FALSE} and the run carries on. The cost is a process launch per file,
 roughly half a second.
 
-`ai` defaults to `"never"` here, unlike in [parseBaselineTable()]. A
+\code{ai} defaults to \code{"never"} here, unlike in \code{\link[=parseBaselineTable]{parseBaselineTable()}}. A
 directory can hold thousands of articles, and each fallback is a billable
 API call; opting a whole corpus into that should be deliberate. When you do
-pass `ai = "fallback"`, the number of files that will be sent is reported
+pass \code{ai = "fallback"}, the number of files that will be sent is reported
 before any call is made.
 }
 \examples{
@@ -66,5 +66,5 @@ res$result[[1]]$data
 }
 }
 \seealso{
-[parseBaselineTable()]
+\code{\link[=parseBaselineTable]{parseBaselineTable()}}
 }

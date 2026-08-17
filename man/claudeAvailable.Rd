@@ -7,7 +7,7 @@
 claudeAvailable()
 }
 \value{
-`TRUE` if `ANTHROPIC_API_KEY` is set to a non-empty value.
+\code{TRUE} if \code{ANTHROPIC_API_KEY} is set to a non-empty value.
 }
 \description{
 Checks only that an API key is present in the environment; it makes no

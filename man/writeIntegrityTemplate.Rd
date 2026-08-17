@@ -7,25 +7,25 @@
 writeIntegrityTemplate(x, file, extraSheets = TRUE, overwrite = TRUE)
 }
 \arguments{
-\item{x}{A `ParsePDFTable` from [parseBaselineTable()].}
+\item{x}{A \code{ParsePDFTable} from \code{\link[=parseBaselineTable]{parseBaselineTable()}}.}
 
-\item{file}{Path to the `.xlsx` file to write.}
+\item{file}{Path to the \code{.xlsx} file to write.}
 
 \item{extraSheets}{Write the Provenance and Skipped worksheets. Set to
-`FALSE` for a single-worksheet file.}
+\code{FALSE} for a single-worksheet file.}
 
-\item{overwrite}{Overwrite `file` if it already exists.}
+\item{overwrite}{Overwrite \code{file} if it already exists.}
 }
 \value{
-`file`, invisibly.
+\code{file}, invisibly.
 }
 \description{
-Writes `x$data` to the first worksheet in the layout the IntegrityAnalysis
-app expects (the full `.ppBaseColumns()` contract): `TRIAL`, `ROW`, `N`,
-`MEAN`, `SD`, `SE`, `ROUND_MEAN`, `ROUND_DISPERSION`,
-`ROUND_OBSERVATION`, then one integer column per category. `SD` and `SE`
+Writes \code{x$data} to the first worksheet in the layout the IntegrityAnalysis
+app expects (the full \code{.ppBaseColumns()} contract): \code{TRIAL}, \code{ROW}, \code{N},
+\code{MEAN}, \code{SD}, \code{SE}, \code{ROUND_MEAN}, \code{ROUND_DISPERSION},
+\code{ROUND_OBSERVATION}, then one integer column per category. \code{SD} and \code{SE}
 are separate columns and are never converted into each other; a row
-carries whichever the paper printed, and `ROUND_DISPERSION` records that
+carries whichever the paper printed, and \code{ROUND_DISPERSION} records that
 value's printed precision. Continuous rows carry N / MEAN / SD-or-SE and
 the rounding columns; categorical rows leave those blank and carry counts
 in the category columns, which is what the app's own validation requires.
@@ -34,11 +34,12 @@ in the category columns, which is what the app's own validation requires.
 Two further worksheets are added by default. They sit after the data, so
 the app - which reads the first worksheet - is unaffected, but the
 provenance travels with the file:
-
-* **Provenance** - one line per data row, recording whether it came from
-  the deterministic engine or from the model.
-* **Skipped** - the table lines the parser could not use, and why.
+\itemize{
+\item \strong{Provenance} - one line per data row, recording whether it came from
+the deterministic engine or from the model.
+\item \strong{Skipped} - the table lines the parser could not use, and why.
+}
 }
 \seealso{
-[parseBaselineTable()]
+\code{\link[=parseBaselineTable]{parseBaselineTable()}}
 }

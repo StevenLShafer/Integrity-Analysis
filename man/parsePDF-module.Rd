@@ -11,23 +11,24 @@ Integrity-Analysis Shiny app.
 }
 \details{
 Two engines produce that table:
+\itemize{
+\item The \strong{deterministic engine} (\code{\link[=parseBaselineTableHeuristics]{parseBaselineTableHeuristics()}}) works from
+the word coordinates in the PDF text layer. It clusters words into visual
+lines, clusters numeric cells into treatment-arm columns, and recognizes
+cells with regular expressions. Nothing is sent anywhere; the same PDF
+always yields the same answer, and every number can be traced to a printed
+cell. This engine runs first, always.
+\item The \strong{AI fallback} (\code{\link[=parseBaselineTableAI]{parseBaselineTableAI()}}) sends the text of the table
+page to the Claude API and asks for the table back as structured JSON. It
+runs only when the deterministic engine leaves something unread, and every
+value it contributes is recorded in the result's \code{provenance} table so a
+reader can tell the two apart.
+}
 
-* The **deterministic engine** ([parseBaselineTableHeuristics()]) works from
-  the word coordinates in the PDF text layer. It clusters words into visual
-  lines, clusters numeric cells into treatment-arm columns, and recognizes
-  cells with regular expressions. Nothing is sent anywhere; the same PDF
-  always yields the same answer, and every number can be traced to a printed
-  cell. This engine runs first, always.
-* The **AI fallback** ([parseBaselineTableAI()]) sends the text of the table
-  page to the Claude API and asks for the table back as structured JSON. It
-  runs only when the deterministic engine leaves something unread, and every
-  value it contributes is recorded in the result's `provenance` table so a
-  reader can tell the two apart.
-
-[parseBaselineTable()] is the entry point that combines them.
+\code{\link[=parseBaselineTable]{parseBaselineTable()}} is the entry point that combines them.
 
 Because this package is used to prepare data for research-integrity
-analysis, treat both engines as a first pass: **check the parsed table
-against the printed table before drawing any conclusion from it.**
+analysis, treat both engines as a first pass: \strong{check the parsed table
+against the printed table before drawing any conclusion from it.}
 }
 \keyword{internal}

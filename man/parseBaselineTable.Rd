@@ -22,39 +22,39 @@ parseBaselineTable(
 \arguments{
 \item{pdfFile}{Path to the article or submission PDF. The PDF must have a
 text layer; a scanned image must be run through OCR first (for example
-`pdftools::pdf_ocr_text()`).}
+\code{pdftools::pdf_ocr_text()}).}
 
 \item{trial}{Value for the TRIAL column. Defaults to the PDF file name.}
 
-\item{pages}{Integer vector of pages to search. `NULL` (default) searches
+\item{pages}{Integer vector of pages to search. \code{NULL} (default) searches
 the whole document.}
 
-\item{ai}{When to consult the Claude API: `"fallback"`, `"never"`, or
-`"always"`. See Details.}
+\item{ai}{When to consult the Claude API: \code{"fallback"}, \code{"never"}, or
+\code{"always"}. See Details.}
 
 \item{prose}{When no table can be read at all, ask the model for baseline
 data stated in the article's running text — some trials report age,
 weight and sex in a sentence rather than tabulating them. Only reached
-when `ai` is not `"never"` and the table routes have both failed. Rows
-found this way are tagged `"ai-prose"` in `$provenance`.}
+when \code{ai} is not \code{"never"} and the table routes have both failed. Rows
+found this way are tagged \code{"ai-prose"} in \verb{$provenance}.}
 
 \item{parenIsSD}{How to read "a (b)" cells that carry no percent sign:
-`"auto"` decides from the footnotes ("mean (SD)"), the row label
-("n (%)"), and continuous-variable keywords (age, weight, ...);
-`"sd"` always reads mean (SD); `"percent"` always reads n (%).}
+\code{"auto"} decides from the footnotes ("mean (SD)"), the row label
+("n (\%)"), and continuous-variable keywords (age, weight, ...);
+\code{"sd"} always reads mean (SD); \code{"percent"} always reads n (\%).}
 
 \item{roundObsDelta}{ROUND_OBSERVATION is set to ROUND_MEAN +
-`roundObsDelta`. Observations are often recorded with one more digit than
+\code{roundObsDelta}. Observations are often recorded with one more digit than
 the reported mean, hence the default of 1. Set to 0 to make them equal.}
 
-\item{model, effort, maxTokens, apiKey}{Passed to [parseBaselineTableAI()].}
+\item{model, effort, maxTokens, apiKey}{Passed to \code{\link[=parseBaselineTableAI]{parseBaselineTableAI()}}.}
 
 \item{quiet}{Suppress the progress and summary messages.}
 }
 \value{
-An object of class `ParsePDFTable`. `$engine` is `"heuristic"`,
-  `"ai"`, or `"hybrid"`; `$provenance` records the engine per row; and
-  `$flags` records why the fallback was consulted, if it was.
+An object of class \code{ParsePDFTable}. \verb{$engine} is \code{"heuristic"},
+\code{"ai"}, or \code{"hybrid"}; \verb{$provenance} records the engine per row; and
+\verb{$flags} records why the fallback was consulted, if it was.
 }
 \description{
 Reads the baseline characteristics table ("Table 1") out of a randomized
@@ -62,27 +62,28 @@ controlled trial PDF and returns it as one line per baseline variable per
 treatment arm, in the input layout of the Integrity-Analysis app.
 }
 \details{
-The deterministic engine ([parseBaselineTableHeuristics()]) always runs
-first and its rows always win. What happens next depends on `ai`:
+The deterministic engine (\code{\link[=parseBaselineTableHeuristics]{parseBaselineTableHeuristics()}}) always runs
+first and its rows always win. What happens next depends on \code{ai}:
+\itemize{
+\item \code{"fallback"} (the default) consults the Claude API only when the
+deterministic pass left something unread - see \code{\link[=reviewFlags]{reviewFlags()}} - and adds
+only those variables the deterministic pass did not produce. It never
+overwrites a value that was located on the page by coordinate.
+\item \code{"never"} is purely deterministic: no network call is made under any
+circumstance. Use this when the provenance of every number has to be
+mechanical, or when there is no API key.
+\item \code{"always"} skips the deterministic pass and asks the model to read the
+whole table. Useful for comparing the two engines against each other.
+}
 
-* `"fallback"` (the default) consults the Claude API only when the
-  deterministic pass left something unread - see [reviewFlags()] - and adds
-  only those variables the deterministic pass did not produce. It never
-  overwrites a value that was located on the page by coordinate.
-* `"never"` is purely deterministic: no network call is made under any
-  circumstance. Use this when the provenance of every number has to be
-  mechanical, or when there is no API key.
-* `"always"` skips the deterministic pass and asks the model to read the
-  whole table. Useful for comparing the two engines against each other.
-
-If no table can be read by either engine and `prose = TRUE`, a last attempt
+If no table can be read by either engine and \code{prose = TRUE}, a last attempt
 asks the model to find baseline characteristics in the article's running
 text. Some trials never tabulate them — age, weight and sex appear in a
 sentence in the Methods — and in a 250-article sample about a third of the
 articles nothing could be extracted from were of that kind.
 
-Rows are tagged in `$provenance` with the engine that produced them, and
-[writeIntegrityTemplate()] carries that tagging into the spreadsheet.
+Rows are tagged in \verb{$provenance} with the engine that produced them, and
+\code{\link[=writeIntegrityTemplate]{writeIntegrityTemplate()}} carries that tagging into the spreadsheet.
 }
 \examples{
 \dontrun{

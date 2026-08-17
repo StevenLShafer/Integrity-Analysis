@@ -7,7 +7,7 @@
 reviewFlags(x)
 }
 \arguments{
-\item{x}{A `ParsePDFTable` object.}
+\item{x}{A \code{ParsePDFTable} object.}
 }
 \value{
 A character vector of human-readable reasons, possibly empty.
@@ -15,6 +15,6 @@ A character vector of human-readable reasons, possibly empty.
 \description{
 Returns the reasons a parsed table should not be trusted as-is. An empty
 character vector means the deterministic engine read the whole table
-cleanly. [parseBaselineTable()] uses this to decide whether to consult the
+cleanly. \code{\link[=parseBaselineTable]{parseBaselineTable()}} uses this to decide whether to consult the
 AI fallback.
 }
