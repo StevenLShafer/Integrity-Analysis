@@ -78,6 +78,10 @@ Stouffer's `sumz()`.
   committing**: two agents have shared this repository, and
   committed-but-unpushed work was already lost once when a merged branch
   was deleted (recovered in `81b03cf`). Unpushed work does not exist.
+- Pull requests (Steve's rules, 2026-08-16): every PR **branches directly
+  from `main`** — never stack a PR on another PR's branch; each PR is
+  devoted to **one specific issue**, so its testing scope is obvious; and
+  the PR description **opens with a plain statement of the change made**.
 - No Bioconductor-dependent packages (the shinyapps.io image build breaks
   on them — that is why `metap` was replaced by a local `sumz()`).
 - Keep secrets and per-user data out of `outputComments()` logs and out of
