@@ -43,22 +43,23 @@ code-review session, so that one new session can pick up both threads.
 | `ParsePDF_discrepancies_for_review.csv` | 171 diagnostic disagreements with Carlisle, for adjudication |
 | `success_by_year.png`, `ParsePDF_success_by_year.csv` | year/journal regression |
 
-**The blind verification pass FAILED and needs redoing.** The design is sound
-and the pilot worked — 43 trials, **86% of our values confirmed with exactly one
-contradiction in 505 rows**, the disagreements being about which rows belong
-rather than about the numbers. But the full run over 905 trials was launched as
-**four concurrent shards**, and 811 of 861 calls timed out — almost certainly
-API rate limiting, with retries then exceeding the 300-second per-call timeout.
-Timed-out calls largely do not consume tokens, so the spend should be well under
-the $45 estimated; worth confirming in the Anthropic Console.
+**The blind verification pass is DONE (re-run completed 2026-08-16).** The
+first attempt (four concurrent shards) had timed out on 811 of 861 calls; the
+re-run as **two shards with a 900-second per-call timeout** completed with
+**zero timeouts** (confirming the rate-limit diagnosis; total spend for the
+whole effort stayed around the original estimate). Results, merged into
+`C:/temp/ParsePDF_output/` (`ParsePDF_verified.xlsx`,
+`ParsePDF_for_review.csv`):
 
-To redo it: run **sequentially, or at most two shards**, with a longer per-call
-timeout. The scripts are in the session scratchpad
-(`verifyrun.R`, `verifyworker.R`, `mergeverify.R`) and the runner skips files
-that already exist, so a re-run resumes rather than repeating. The same pass
-also harvests arm N, missing from 4,013 rows — the merge fills it **only where
-the two reads agree on ≥80% of a trial's values**, since agreement is the
-evidence that both engines read the same table.
+- 785 of 905 trials produced a comparable blind read (90 pages the model
+  declined as having no baseline table, plus tag collisions account for the
+  rest).
+- **7,560 of 12,500 shipped rows (60.5%) confirmed** by the independent read.
+- **2,778 missing arm Ns filled** under the ≥80%-agreement gate: rows carrying
+  an N rose **from 41.5% to 63.8%**.
+- 3,115 rows written to the review list. The pilot's pattern (disagreements
+  are mostly about *which rows belong*, not about the numbers) has not been
+  re-examined at this scale — adjudicating that list is the natural next step.
 
 **A collision worth learning from.** This session committed to a local
 `fix-r-code-errors` branch without pushing; the review session then merged the
