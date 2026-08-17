@@ -49,8 +49,89 @@ P_Calc <- function(TRIAL, DATA, CategoryNames, m)
       # Greater than 1 line?
       if (nrow(ROWS) > 1)
       {
+        isQuartile <- "Q1" %in% names(ROWS) &&
+                      (any(!is.na(ROWS$Q1)) || any(!is.na(ROWS$Q3)))
         # Is this categorical?
-        if (all(!is.na(ROWS$N)))
+        if (isQuartile && all(!is.na(ROWS$N)))
+        {
+          # Median/IQR row (Steve's design decision 2026-08-17: quartiles
+          # present means MEAN holds the MEDIAN). The null hypothesis is
+          # the same as for means - all arms sampled from one common
+          # population - but the population is reconstructed from the
+          # pooled median and quartiles with a 3-term METALOG
+          # distribution (Keelin 2016): it matches the median, Q1, and
+          # Q3 EXACTLY including their asymmetry (papers report medians
+          # precisely because the data are skewed; a normal fitted as
+          # sigma = IQR/1.349 would throw the skew away), its quantile
+          # function is closed-form so sampling is one vectorized
+          # expression, and it reduces to a symmetric logistic when the
+          # quartiles are symmetric. Coefficients (NOTE: the a3 here is
+          # 2(Q1+Q3-2m)/ln3; a shared Gemini analysis of this problem
+          # printed 4(...)/ln3, a factor-of-2 slip against its own
+          # derivation - the unit test pins exact quantile recovery):
+          #   a1 = m,  a2 = IQR/(2 ln 3),  a3 = 2(Q1 + Q3 - 2m)/ln 3
+          #   X(u) = a1 + a2*logit(u) + a3*(u - 0.5)*logit(u)
+          # Feasibility requires |a3/a2| <= 1.667 (Keelin); beyond that
+          # the quantile function is non-monotone and the row is refused
+          # rather than mis-simulated.
+          if (any(is.na(ROWS$Q1)) || any(is.na(ROWS$Q3)))
+          {
+            PLE <- "Mixed SD and quartile lines"
+            PGE <- NA
+          } else {
+          COLS <- nrow(ROWS)
+          N <- sum(ROWS$N)
+          # pooled (N-weighted) median and quartiles define the common
+          # population, parallel to the pooled mean/SD in the mean branch
+          medPool <- sum(ROWS$N * ROWS$MEAN) / N
+          q1Pool  <- sum(ROWS$N * ROWS$Q1) / N
+          q3Pool  <- sum(ROWS$N * ROWS$Q3) / N
+          a1 <- medPool
+          a2 <- (q3Pool - q1Pool) / (2 * log(3))
+          a3 <- 2 * (q1Pool + q3Pool - 2 * medPool) / log(3)
+          if (a2 <= 0 || abs(a3) / a2 > 1.667)
+          {
+            PLE <- "Quartiles too skewed to simulate"
+            PGE <- NA
+          } else {
+          if ((m*N) < 1000000000)
+          {
+            m1 <- m
+          } else {
+            m1 <- floor(1000000000 / N)
+          }
+          # Per-replication uncertainty in the common location, parallel
+          # to SEMsample in the mean branch. Asymptotic SD of a sample
+          # median is 1/(2 f(m) sqrt(n)); the metalog density at its
+          # median is 1/(4 a2), so SD_median = 2 a2 / sqrt(n).
+          shiftsim <- dqrnorm(m1, mean = 0,
+                              sd = 2 * a2 / sqrt(mean(ROWS$N)))
+          MonteCarloMed <- matrix(NA, nrow = m1, ncol = COLS)
+          for (i in 1:COLS)
+          {
+            U <- matrix(dqrunif(ROWS$N[i] * m1), nrow = m1)
+            L <- log(U / (1 - U))
+            X <- (a1 + shiftsim) + a2 * L + a3 * (U - 0.5) * L
+            MonteCarloMed[,i] <-
+              round(
+                Rfast::rowMedians(
+                  round(X, ROWS$ROUND_OBSERVATION[i])),
+                ROWS$ROUND_MEAN[i])
+          }
+          Nmat <- matrix(ROWS$N, nrow = m1, ncol = COLS, byrow = TRUE)
+          MedCenter   <- rowsums(MonteCarloMed * Nmat) / N
+          DiffSamples <- rowsums((MonteCarloMed - MedCenter)^2)
+          center     <- sum(ROWS$N * ROWS$MEAN) / N
+          DiffSample <- sum((ROWS$MEAN - center)^2)
+          PEQ <- sum(DiffSamples == DiffSample) / m1
+          # lower mid-p tail toward homogeneity, same convention as the
+          # mean branch
+          PLE <- sum(DiffSamples < DiffSample)/m1 + PEQ/2
+          PGE <- sum(DiffSamples > DiffSample)/m1 + PEQ/2
+          }
+          }
+        }
+        else if (all(!is.na(ROWS$N)))
         {
           COLS <- nrow(ROWS)
           N <- sum(ROWS$N)
@@ -153,13 +234,17 @@ P_Calc <- function(TRIAL, DATA, CategoryNames, m)
           PLE <- chisq.test(ROWS, simulate.p.value=TRUE, B=m)$p.value
           PGE <- 1-PLE
         }
-        # Need to be sure P != 0 or 1
-        if(PLE == 1) PLE <- 0.999
-        if(PLE == 0) PLE <- 0.001
-        if(PGE == 1) PGE <- 0.999
-        if(PGE == 0) PGE <- 0.001
-        PLE = as.character(signif(PLE,4))
-        PGE = as.character(signif(PGE, 4))
+        # Need to be sure P != 0 or 1. (Guarded: the median/IQR branch can
+        # refuse a row with a message string instead of a number.)
+        if (is.numeric(PLE))
+        {
+          if(PLE == 1) PLE <- 0.999
+          if(PLE == 0) PLE <- 0.001
+          if(PGE == 1) PGE <- 0.999
+          if(PGE == 0) PGE <- 0.001
+          PLE = as.character(signif(PLE,4))
+          PGE = as.character(signif(PGE, 4))
+        }
       } else {
         PLE = "Only 1 Row"
         PGE = NA

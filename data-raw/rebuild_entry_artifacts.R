@@ -14,7 +14,9 @@ suppressMessages({library(openxlsx); library(grid); library(gridExtra)})
 repo <- "C:/dev/IntegrityAnalysis"
 
 ## 1 ── Template ────────────────────────────────────────────────────────────
-base <- c("TRIAL", "ROW", "N", "MEAN", "SD", "SE",
+# Q1/Q3 added 2026-08-17 (median/IQR support): when both are filled in,
+# MEAN is read as the MEDIAN and SD/SE must be empty.
+base <- c("TRIAL", "ROW", "N", "MEAN", "SD", "SE", "Q1", "Q3",
           "ROUND_MEAN", "ROUND_DISPERSION", "ROUND_OBSERVATION")
 tpl <- data.frame(matrix(nrow = 0, ncol = length(base)))
 names(tpl) <- base
@@ -41,6 +43,25 @@ for (tr in unique(ex$TRIAL)) {
   if (!is.na(i))
     ex$SE[i] <- round(ex$SD[i] / sqrt(ex$N[i]), 2)
 }
+if (!"Q1" %in% names(ex)) ex$Q1 <- NA_real_
+if (!"Q3" %in% names(ex)) ex$Q3 <- NA_real_
+# One median/IQR variable in trial 1, demonstrating the convention:
+# quartiles filled -> MEAN is the median, SD/SE empty. Values are
+# mildly right-skewed, as median-reported variables usually are.
+if (!any(ex$ROW == "Duration", na.rm = TRUE)) {
+  tr1 <- ex$TRIAL[1]
+  dur <- ex[0, ]
+  dur[1:2, "TRIAL"] <- tr1
+  dur$ROW <- "Duration"
+  dur$N <- c(25, 25)
+  dur$MEAN <- c(12.0, 11.5)          # medians
+  dur$Q1 <- c(8.0, 8.5)
+  dur$Q3 <- c(17.0, 16.0)
+  dur$ROUND_MEAN <- 1
+  dur$ROUND_DISPERSION <- 1
+  dur$ROUND_OBSERVATION <- 1
+  ex <- rbind(ex, dur)
+}
 catCols <- setdiff(names(ex), base)
 ex <- ex[, c(base, catCols)]
 write.xlsx(ex, file.path(repo, "inst/extdata/Example.xlsx"),
@@ -52,11 +73,13 @@ rows <- rbind(
   c("TRIAL",             "alphanumeric", "No",  "Unique trial identifier (not needed if only 1 trial)"),
   c("ROW",               "alphanumeric", "Yes", "Table row (e.g., 'weight', 'age')"),
   c("N",                 "integer",      "Yes", "Number of subjects for specific row entry"),
-  c("MEAN",              "floating",     "Yes", "Mean"),
+  c("MEAN",              "floating",     "Yes", "Mean - or the MEDIAN when Q1 and Q3 are filled in"),
   c("SD",                "floating",     "Yes", "Standard deviation - the analysis requires an SD"),
   c("SE",                "floating",     "No",  "Standard error, if that is what the paper reports - never in the SD column. A row with SE but no SD is flagged for you to convert (SD = SE x sqrt(N))"),
+  c("Q1",                "floating",     "No",  "First quartile (25th percentile). If Q1 and Q3 are filled in, MEAN is read as the MEDIAN and SD/SE must be empty"),
+  c("Q3",                "floating",     "No",  "Third quartile (75th percentile); reported with Q1 as the IQR"),
   c("ROUND MEAN",        "integer",      "No",  "Rounding (decimal places) of the printed mean"),
-  c("ROUND DISPERSION",  "integer",      "No",  "Rounding of the printed SD or SE"),
+  c("ROUND DISPERSION",  "integer",      "No",  "Rounding of the printed SD, SE, or quartiles"),
   c("ROUND OBS",         "integer",      "No",  "Rounding for Observation")
 )
 tab <- as.data.frame(rows, stringsAsFactors = FALSE)
@@ -93,10 +116,10 @@ foot <- grid::textGrob(
   x = 0.005, hjust = 0, gp = grid::gpar(fontsize = 15.5, fontfamily = "sans",
                                         col = "#333333"))
 
-png(file.path(repo, "inst/www/Table.png"), width = 1450, height = 500,
+png(file.path(repo, "inst/www/Table.png"), width = 1450, height = 580,
     res = 96, bg = bg)
 grid::grid.newpage()
-lay <- grid::grid.layout(3, 1, heights = grid::unit(c(0.075, 0.79, 0.135), "npc"))
+lay <- grid::grid.layout(3, 1, heights = grid::unit(c(0.065, 0.82, 0.115), "npc"))
 grid::pushViewport(grid::viewport(layout = lay))
 grid::pushViewport(grid::viewport(layout.pos.row = 1)); grid::grid.draw(title); grid::popViewport()
 grid::pushViewport(grid::viewport(layout.pos.row = 2))

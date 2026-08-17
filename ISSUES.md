@@ -488,6 +488,38 @@ compute.
 
 ---
 
+## 12. Median/IQR rows (IMPLEMENTED 2026-08-17; validation approach open)
+
+Steve's design (2026-08-17), confirmed after discussion: **Q1 and Q3
+columns** (two quartiles, not a single IQR width — the quartiles carry the
+asymmetry, and papers print `median [Q1–Q3]` anyway); when both are filled
+in, **MEAN is read as the MEDIAN** and SD/SE must be empty. Validation
+enforces completeness (both quartiles, N, median), unambiguity (no SD/SE
+alongside), and Q1 ≤ median ≤ Q3.
+
+**The Monte Carlo null** reconstructs the common population from the pooled
+(N-weighted) median and quartiles with a **3-term metalog** (Keelin 2016):
+matches m/Q1/Q3 exactly including skew, closed-form quantile function
+(`X = a1 + a2·logit(u) + a3(u−½)·logit(u)`), reduces to a symmetric
+logistic when the quartiles are symmetric. Steve's shared Gemini analysis
+(https://share.gemini.google/p0YqsFwQKEIw) surveyed the options; note its
+printed a3 coefficient is off by a factor of 2 against its own derivation —
+the correct value is `a3 = 2(Q1+Q3−2m)/ln 3`, pinned by an
+exact-quantile-recovery unit test. Rows with |a3/a2| > 1.667 (metalog
+validity bound) are refused with a message rather than mis-simulated.
+Simulated arm MEDIANS are rounded as printed (observations to
+ROUND_OBSERVATION, medians to ROUND_MEAN) and compared by the same
+between-arm sum of squares, lower mid-p tail, Stouffer combination.
+
+**Validation status**: no Carlisle-style ground truth exists for median
+rows. In place: a calibration property test (honest lognormal trials →
+p roughly uniform; in the testthat suite) and direction tests. Worth
+considering later: a larger calibration study across N, skew, and rounding
+regimes, and checking the metalog null against other plausible shapes for
+sensitivity.
+
+---
+
 ## Closed
 
 *(nothing yet)*
