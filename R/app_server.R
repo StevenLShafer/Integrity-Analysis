@@ -170,7 +170,7 @@ app_server <- function(input, output, session) {
         )
         progress$set(
           value = i / LengthTrials,
-          detail = paste0(TRIAL, ", P = ",OUTPUT$PLE[nrow(OUTPUT)-1]))
+          detail = paste0(TRIAL, ", P = ",OUTPUT$P[nrow(OUTPUT)-1]))
       }
       # FIX: removed 'with(registerDoFuture(), local = TRUE)' (the line the
       # original marked "Not sure which is correct"). with() has no 'local'
@@ -419,7 +419,9 @@ app_server <- function(input, output, session) {
     },
     content = function(file) {
       x <- OUTPUT
-      names(x) <- c("TRIAL", "ROW", "Fraction <=", "Fraction >=")
+      # One-sided toward homogeneity (issue 6): a single P column. Small
+      # P = baseline data more homogeneous than random sampling explains.
+      names(x) <- c("TRIAL", "ROW", "P (one-sided toward homogeneity)")
       write.xlsx(x, file)
     })
 
