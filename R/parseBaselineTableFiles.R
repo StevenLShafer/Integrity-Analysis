@@ -76,7 +76,12 @@ parseBaselineTableFiles <- function(files,
   if (!is.null(outputDir) && !dir.exists(outputDir))
     dir.create(outputDir, recursive = TRUE)
 
-  script <- system.file("scripts", "parseOne.R", package = "ParsePDF")
+  # FIX (2026-08-17): was package = "ParsePDF" - a fold-in leftover. It
+  # worked on the development machine only because the retired ParsePDF
+  # package was still installed there and silently supplied the script;
+  # on shinyapps.io it made every PDF upload fail instantly.
+  script <- system.file("scripts", "parseOne.R",
+                        package = "IntegrityAnalysis")
   if (!nzchar(script))
     stop("Could not find parseOne.R inside the installed package.")
   rscript <- file.path(R.home("bin"),
