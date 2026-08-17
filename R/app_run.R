@@ -38,5 +38,9 @@ run_app <- function(testNote = NULL) {
   shiny::addResourcePath(
     "www", system.file("www", package = "IntegrityAnalysis"))
 
+  # Shiny's default upload cap is 5 MB - too small for journal article
+  # PDFs, which the app parses since the PDF-upload feature (2026-08-17).
+  options(shiny.maxRequestSize = 50 * 1024^2)
+
   shiny::shinyApp(app_ui(testNote), app_server)
 }
