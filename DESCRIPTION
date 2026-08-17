@@ -28,6 +28,7 @@ Imports:
   pdftools,
   readxl,
   Rfast,
+  rhandsontable,
   shiny,
   shinydashboard,
   shinyjs,

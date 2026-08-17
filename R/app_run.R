@@ -31,6 +31,7 @@ run_app <- function(testNote = NULL) {
     library(dqrng)          # dqrnorm: fast RNG for the simulated means
     library(bslib)          # input_task_button
     library(shinydashboard)
+    library(rhandsontable)  # the editable pre-analysis data grid
   }))
 
   # A packaged app has no auto-served www/ directory; serve inst/www under

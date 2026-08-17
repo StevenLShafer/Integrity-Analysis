@@ -109,6 +109,14 @@ app_ui <- function(testNote = NULL)
           HTML("<br>Select data entry spreadsheet (csv, xls, or xlsx) or article PDF<br>"),
           fileInput("upload", NULL,
                     accept = c(".csv", ".xls", ".xlsx", ".pdf")),
+          # The editable pre-analysis grid (Steve's request, 2026-08-17):
+          # whatever the upload produced - spreadsheet rows or a PDF
+          # extraction - is shown here for inspection and editing BEFORE
+          # any statistics run. Edits take effect through the "Apply
+          # Edits & Revalidate" button below the grid; for a parsed PDF
+          # this is where a missing arm N gets filled in directly.
+          rhandsontable::rHandsontableOutput("dataGrid"),
+          uiOutput("validateButton"),
           uiOutput("GoButton"),
           # Appears after a PDF parse: the extracted table as a spreadsheet,
           # so a partial extraction is a round trip (fill the gaps, re-upload
