@@ -15,9 +15,12 @@
 #' null hypothesis of random sampling from a common population, comparing
 #' the observed between-arm sum of squares against the simulated
 #' distribution; categorical rows are tested with a simulated chi-square.
-#' Per-row one-sided p-values (PLE = fraction of simulations at least as
-#' homogeneous, PGE = at least as heterogeneous) are combined across rows
-#' with Stouffer's [sumz()].
+#' Per-row one-sided p-values are **mid-p** (ties in the discrete simulated
+#' statistic count half): PLE = P(more homogeneous) + P(tie)/2, PGE the
+#' mirror, so PLE + PGE = 1. This matches Carlisle's published 2017 values
+#' (issue-3 pilot: per-trial r = 0.995). Rows are combined across the trial
+#' with Stouffer's [sumz()]. The categorical branch keeps `chisq.test`'s own
+#' simulated-p convention.
 #'
 #' @param TRIAL the trial identifier (matched against `DATA$TRIAL`).
 #' @param DATA the validated data table (all trials; see [validateData()]).
@@ -119,8 +122,19 @@ P_Calc <- function(TRIAL, DATA, CategoryNames, m)
           DiffSamples <- rowsums((MonteCarloMean - MeanSamples)^2)
 
           PEQ <- sum(DiffSamples == DiffSample) / m1
-          PLE <- sum(DiffSamples < DiffSample)/m1 + PEQ
-          PGE <- sum(DiffSamples > DiffSample)/m1 + PEQ
+          # Mid-p convention (Steve's decision, 2026-08-16): simulated ties
+          # count HALF, so PLE = P(<) + PEQ/2 and PLE + PGE = 1 exactly.
+          # Rounding makes DiffSamples discrete, so ties are common and the
+          # choice matters. Previously ties counted fully into BOTH tails,
+          # which inflated p in whichever direction was reported. Evidence
+          # for mid-p: the issue-3 pilot against Carlisle's stored 2017
+          # values - full-tie PLE disagreed with median |diff| 0.076,
+          # always ours-higher (the tie-inflation signature); as mid-p,
+          # per-trial r = 0.995 with 93% within 0.05. Carlisle's published
+          # values are, in effect, mid-p, and mid-p is the standard
+          # recommendation for discrete test statistics.
+          PLE <- sum(DiffSamples < DiffSample)/m1 + PEQ/2
+          PGE <- sum(DiffSamples > DiffSample)/m1 + PEQ/2
         } else {
           # FIX: drop = FALSE added. With a single category column,
           # ROWS[,CategoryNames] dropped to a bare vector and the
