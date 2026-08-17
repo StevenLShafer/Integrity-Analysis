@@ -149,7 +149,37 @@ P < 0.05 (too homogeneous), so every stored value is < 0.5, with 1 − P recorde
 wherever Stouffer's sumz exceeded 0.5. Reproducing his numbers therefore
 requires reproducing that convention. Issue 6 then changes it deliberately —
 these are two separate steps and conflating them will make validation look like
-a bug.
+a bug. (Pilot correction: the stored `p.value` column itself is the raw
+one-sided value — it exceeds 0.5 freely; `p.value 2-sided` is the folded one.)
+
+**Pilot results — 2026-08-16, 100 random trials, m = 15,000.** Run through the
+app's own `validateData()` → `P_Calc()` from `One Sheet Carlisle Data.xlsx`,
+compared against the repaired `Carlisle Data with PMIDs.xlsx`:
+
+- **Direction confirmed**: our PLE correlates with his `p.value` as-is
+  (r = +0.88), so both count small = too homogeneous.
+- **Tie handling is the method difference.** As shipped, `P_Calc` counts all
+  simulated ties into PLE (P(<) + P(=)), and agreement is mediocre (median
+  |diff| 0.076, 36% within 0.05, always in the ours-higher direction — the
+  signature of tie inflation on a rounding-discretized statistic). Recomputing
+  as **mid-p** (P(<) + P(=)/2, recoverable from P_Calc's own PLE/PGE since
+  PEQ = PLE+PGE−1): per-variable r = 0.996 with median |diff| 0.006; per-trial
+  r = 0.995, median |diff| 0.013, **93% within 0.05**. Carlisle's published
+  values are, in effect, mid-p. The residual is consistent with two
+  independent Monte Carlos of finite size.
+- **Decision needed from Steve before the full 5,087-trial run**: adopt mid-p
+  (matches Carlisle; arguably the standard choice for discrete statistics),
+  keep the current full-tie convention (more conservative — higher p, fewer
+  alarms), or fold the choice into issue 6's redesign, which is deciding the
+  p-value's meaning anyway. Validation should then be run with whichever
+  convention is chosen for the comparison, and the app's convention documented
+  either way.
+- **Bookkeeping**: the two files' journal names differ (one-sheet uses BJA /
+  CJA / EJA / NEJM / JAMA / "Anesthesia and Analgesia"; the wide file uses
+  full journal names, `&amp;` included) — an 8-entry lookup joins them, to be
+  used for the full run. Per-journal trial counts agree to within a few
+  trials. The wide file's formula columns (`p.value 2-sided`, `Variables`)
+  have no cached values and read as NA from R — recompute, don't read.
 
 ---
 
