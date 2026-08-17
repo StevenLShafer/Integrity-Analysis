@@ -108,6 +108,12 @@ app_ui <- function(testNote = NULL)
           12,
           HTML("<br>Select data entry spreadsheet (csv, xls, or xlsx)<br>"),
           fileInput("upload", NULL, accept = c(".csv", ".xls", ".xlsx")),
+          # The editable pre-analysis grid (Steve's request, 2026-08-17):
+          # whatever the upload produced is shown here for inspection and
+          # editing BEFORE any statistics run. Edits take effect through
+          # the "Apply Edits & Revalidate" button below the grid.
+          rhandsontable::rHandsontableOutput("dataGrid"),
+          uiOutput("validateButton"),
           uiOutput("GoButton"),
           uiOutput("logContent"),
           uiOutput("downloadButton")

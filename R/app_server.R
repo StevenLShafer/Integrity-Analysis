@@ -83,6 +83,57 @@ app_server <- function(input, output, session) {
   session$userData$commentsLog <- commentsLog
 
   ###########################################################
+  # The editable pre-analysis grid                          #
+  ###########################################################
+  # Steve's request (2026-08-17): every input path lands its table in an
+  # editable grid (rhandsontable, the same machinery stanpumpR uses) so
+  # the data can be inspected and corrected BEFORE any statistics run.
+  # Validation still runs automatically on upload - a clean file goes
+  # straight to the Analyze button, exactly as before - but the user can
+  # now fix what validation flags (a missing N, a mistyped SD) directly
+  # in the grid and revalidate, instead of editing the file and
+  # re-uploading. Revalidation is EXPLICIT (a button), not per-keystroke:
+  # each validation pass writes line-by-line messages to the comments
+  # log, and firing it on every cell edit would bury the user in output.
+
+  output$dataGrid <- rhandsontable::renderRHandsontable({
+    d <- reactiveData()
+    if (is.null(d)) return(NULL)
+    rhandsontable::rhandsontable(
+      d,
+      # cap the widget height; rhandsontable scrolls and virtualizes rows
+      height = min(400, 60 + 24 * nrow(d)),
+      rowHeaders = TRUE) |>
+      rhandsontable::hot_table(highlightRow = TRUE, highlightCol = TRUE)
+  })
+
+  output$validateButton <- renderUI({
+    if (is.null(reactiveData())) return(NULL)
+    tagList(
+      actionButton("applyEdits", "Apply Edits & Revalidate"),
+      HTML("<br><br>"))
+  })
+
+  observeEvent(input$applyEdits, {
+    if (is.null(input$dataGrid)) return()
+    # Test seam: a real client always sends the handsontable payload (a
+    # list) which hot_to_r() decodes; shiny::testServer can instead
+    # inject a plain data.frame directly, keeping this flow headlessly
+    # testable without faking the widget's wire format.
+    edited <- if (is.data.frame(input$dataGrid)) input$dataGrid
+              else rhandsontable::hot_to_r(input$dataGrid)
+    # A fresh validation pass gets a fresh log, and any previous results
+    # are discarded - the edited table is now the data of record.
+    commentsLog(NULL)
+    OUTPUT <<- NULL
+    reactiveDone(FALSE)
+    output$downloadButton <- NULL
+    reactiveDataValidated(NULL)
+    output$GoButton <- NULL
+    reactiveData(edited)
+  })
+
+  ###########################################################
   # Processing Loop                                         #
   ###########################################################
 
