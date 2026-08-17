@@ -32,14 +32,21 @@ No renv (deliberate — see the plan). Since the ParsePDF fold-in
 its ~295-assertion testthat suite (`tests/testthat/`, synthetic PDFs, no
 fixtures needed); app-side tests are still to come (issue 4).
 
-The upload pipeline: file → column-name normalization by grep (any
-"MEAN"-containing name that isn't MEAN → `ROUND_MEAN`, "OBS" →
-`ROUND_OBSERVATION`, "TRIAL", "ROW"/"GROUP", "NUMBER" → N) → per-line
-validation (continuous rows need N/MEAN/SD; category rows must be numeric,
-integer-valued, with at least one NA in the column) → per-trial `P_Calc()`:
-closed-form weighted means, Monte Carlo of rounded simulated means
-(continuous) or simulated chi-square (categorical), rows combined with
-Stouffer's `sumz()`.
+The upload pipeline (since 2026-08-17 all input modes converge on one
+editable grid — Steve's original vision): file (csv/xls/xlsx, **or an
+article PDF**, parsed by the deterministic engine in a subprocess and
+narrated in the comments log) → the **editable rhandsontable grid** (fix a
+missing N or a mistyped SD in place; "Apply Edits & Revalidate") →
+column-name normalization by grep (any "MEAN"-containing name that isn't
+MEAN → `ROUND_MEAN`, "OBS" → `ROUND_OBSERVATION`, "TRIAL", "ROW"/"GROUP",
+"NUMBER" → N) → per-line validation (continuous rows need N/MEAN/SD;
+category rows must be numeric, integer-valued, with at least one NA in the
+column) → per-trial `P_Calc()`: closed-form weighted means, Monte Carlo of
+rounded simulated means (continuous) or simulated chi-square
+(categorical), **mid-p** ties, rows combined with Stouffer's `sumz()`. A
+failed PDF extraction is a round trip: the partial table is offered as a
+download in the app's own input layout. Local hand-test PDFs, one per
+parsing challenge: `corpus/` (see its README).
 
 ## Running, testing, deploying
 
