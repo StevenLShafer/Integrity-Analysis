@@ -11,8 +11,14 @@
 
 #' Launch the Integrity Analysis Shiny app
 #'
+#' @param testNote optional single string shown as a prominent banner under
+#'   the header, naming the PR under test and what to look at (e.g.
+#'   `"PR #6: function extraction - exercise upload, validate, analyze"`).
+#'   PR test deployments (`IntegrityAnalysis_PR_<n>`) deploy an `app.R` that
+#'   passes this; production passes nothing and shows no banner.
+#'
 #' @export
-run_app <- function() {
+run_app <- function(testNote = NULL) {
   suppressWarnings(suppressPackageStartupMessages({
     library(shiny)
     library(openxlsx)       # read.xlsx / write.xlsx (xlsx upload + results download)
@@ -32,5 +38,5 @@ run_app <- function() {
   shiny::addResourcePath(
     "www", system.file("www", package = "IntegrityAnalysis"))
 
-  shiny::shinyApp(app_ui(), app_server)
+  shiny::shinyApp(app_ui(testNote), app_server)
 }

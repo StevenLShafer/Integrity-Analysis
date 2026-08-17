@@ -58,6 +58,13 @@ Stouffer's `sumz()`.
   A locally-installed (`R CMD INSTALL`) copy will NOT deploy — shinyapps.io
   can only fetch the package from GitHub, so push first, deploy second.
   PR test apps are `IntegrityAnalysis_PR_<n>`; purge them after merging.
+  **A PR test app must identify itself in the UI** (Steve's rule,
+  2026-08-16): deploy it with an `app.R` of the form
+  `IntegrityAnalysis::run_app(testNote = "PR #<n>: <what to test>")` —
+  write that shim to a scratch directory and point `deployApp(appDir=)` at
+  it, so the repository's production `app.R` is never edited. The note
+  renders as an orange banner under the header, telling the tester which
+  PR this is and what to look at without opening GitHub.
   (The pre-package procedure, for history: `handoff/2026-08-16-merged-handoff.md`.)
 - Production: https://steveshafer.shinyapps.io/IntegrityAnalysis/
   (rsconnect account `steveshafer`).
