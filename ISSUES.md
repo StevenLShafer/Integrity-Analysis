@@ -265,6 +265,32 @@ inverts the detector, so confirm the intent, and if the first reading is meant,
 give the output a name other than "p-value" so nobody applies p < 0.05 to it
 reflexively.
 
+**IMPLEMENTED — 2026-08-17 (Steve: proceed).** Decisions, as built:
+
+- **Tail**: P = probability of data *at least as homogeneous* as observed
+  (mid-p) — small p = alarming, the ordinary convention. This is the tail the
+  issue-3 validation already confirmed matches Carlisle's direction, so the
+  continuous branch is **bit-identical** to the validated implementation
+  (verified under fixed seeds); the change is presentational there.
+- **Single column.** The heterogeneity value (old PGE / "Fraction >=") is
+  gone from the output: under mid-p it is exactly 1 − P, so it carried no
+  information, and reporting it invited exactly the false-accusation reading
+  this issue exists to prevent. Results carry TRIAL / ROW / P; the download
+  column is labeled "P (one-sided toward homogeneity)".
+- **Categorical direction FIXED.** `chisq.test`'s simulated p is the *upper*
+  tail — small when arms differ *more* than chance — which pointed the wrong
+  way for fraud detection and was directionally inconsistent with the
+  continuous rows it was Stouffer-combined with (the old folded convention
+  masked this). Categorical rows now simulate contingency tables under the
+  observed margins (`r2dtable`, the same null `chisq.test` uses) and take the
+  *lower* mid-p tail: counts more similar across arms than chance → small p.
+  Direction verified: identical 25/25-vs-25/25 arms give P ≈ 0.08; strongly
+  imbalanced 40/10-vs-10/40 arms give P ≈ 0.999. (Carlisle's corpus is
+  continuous-only, so the issue-3 validation is untouched by this.)
+- Still to do outside the code: the user documentation
+  (`IntegrityAnalysis.pdf`, built from Steve's Word source) still describes
+  the two-column output and needs the corresponding text change.
+
 ---
 
 ## 7. Survey other open-source research-integrity screens

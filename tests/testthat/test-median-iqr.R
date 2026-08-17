@@ -67,7 +67,7 @@ pOf <- function(d, m = 4000) {
   x <- suppressWarnings(shiny::isolate(
     P_Calc("T", d, NULL, m)))
   suppressWarnings(as.numeric(
-    x$PLE[x$ROW == "Summary" & !is.na(x$ROW)]))[1]
+    x$P[x$ROW == "Summary" & !is.na(x$ROW)]))[1]
 }
 
 test_that("median rows point the right way: identical arms alarm, different arms do not", {
@@ -86,7 +86,7 @@ test_that("a too-skewed row is refused, not mis-simulated", {
   # |a3/a2| > 1.667: Q3 - m much smaller than m - Q1, extreme
   d <- rbind(mkrow(12, 2, 12.4), mkrow(12, 2, 12.4))
   x <- suppressWarnings(shiny::isolate(P_Calc("T", d, NULL, 1000)))
-  expect_true(any(grepl("skewed", x$PLE)))
+  expect_true(any(grepl("skewed", x$P)))
 })
 
 test_that("calibration: honest median/IQR data give roughly uniform p", {

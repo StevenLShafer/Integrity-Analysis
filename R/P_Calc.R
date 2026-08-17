@@ -10,25 +10,39 @@
 
 #' Monte Carlo integrity analysis of one trial's baseline table
 #'
-#' For each ROW of the trial: continuous rows (all arms carry an N) are
-#' tested by simulating `m` replications of rounded per-arm means under the
-#' null hypothesis of random sampling from a common population, comparing
-#' the observed between-arm sum of squares against the simulated
-#' distribution; categorical rows are tested with a simulated chi-square.
-#' Per-row one-sided p-values are **mid-p** (ties in the discrete simulated
-#' statistic count half): PLE = P(more homogeneous) + P(tie)/2, PGE the
-#' mirror, so PLE + PGE = 1. This matches Carlisle's published 2017 values
-#' (issue-3 pilot: per-trial r = 0.995). Rows are combined across the trial
-#' with Stouffer's [sumz()]. The categorical branch keeps `chisq.test`'s own
-#' simulated-p convention.
+#' Reports a single **one-sided p-value toward excessive homogeneity**
+#' (issue 6, Steve's decision 2026-08-16, implemented 2026-08-17): P = the
+#' probability, under the null hypothesis of random sampling, of baseline
+#' data **at least as homogeneous** as observed. Small p = suspiciously
+#' homogeneous - the demonstrated fraud signal (Fujii). Excessive
+#' heterogeneity is deliberately NOT reported: it is not a known
+#' fabrication signal, and under the mid-p tie rule it is exactly
+#' 1 - P anyway, so the old second column carried no information.
+#'
+#' Per row: continuous rows (all arms carry an N) simulate `m`
+#' replications of rounded per-arm means and take the lower mid-p tail of
+#' the between-arm sum of squares (unchanged from the Carlisle-validated
+#' implementation - issue 3, per-trial r = 0.995). Categorical rows
+#' simulate `m` contingency tables under fixed margins (`r2dtable`, the
+#' same null `chisq.test` uses) and take the lower mid-p tail of the
+#' chi-square statistic - counts more similar across arms than chance.
+#' NOTE this reverses the categorical direction: `chisq.test`'s p is the
+#' UPPER tail (small = arms differ more than chance), which pointed the
+#' wrong way for fraud detection and was directionally inconsistent with
+#' the continuous rows it was Stouffer-combined with. Median/IQR rows
+#' (Q1/Q3 filled in; MEAN read as the median) reconstruct the pooled
+#' population with a 3-term metalog matched to the pooled median and
+#' quartiles and take the lower mid-p tail of the between-arm scatter of
+#' rounded arm MEDIANS. Rows are combined across the trial with
+#' Stouffer's [sumz()].
 #'
 #' @param TRIAL the trial identifier (matched against `DATA$TRIAL`).
 #' @param DATA the validated data table (all trials; see [validateData()]).
 #' @param CategoryNames names of the category (count) columns, or `NULL`.
 #' @param m number of Monte Carlo replications.
-#' @return a data.frame with columns TRIAL, ROW, PLE, PGE: one row per data
-#'   ROW, then a "Summary" row with the Stouffer-combined p-values, then a
-#'   blank spacer row.
+#' @return a data.frame with columns TRIAL, ROW, P: one row per data ROW,
+#'   then a "Summary" row with the Stouffer-combined p, then a blank
+#'   spacer row.
 #' @noRd
 P_Calc <- function(TRIAL, DATA, CategoryNames, m)
 {
@@ -76,8 +90,7 @@ P_Calc <- function(TRIAL, DATA, CategoryNames, m)
           # rather than mis-simulated.
           if (any(is.na(ROWS$Q1)) || any(is.na(ROWS$Q3)))
           {
-            PLE <- "Mixed SD and quartile lines"
-            PGE <- NA
+            P <- "Mixed SD and quartile lines"
           } else {
           COLS <- nrow(ROWS)
           N <- sum(ROWS$N)
@@ -91,8 +104,7 @@ P_Calc <- function(TRIAL, DATA, CategoryNames, m)
           a3 <- 2 * (q1Pool + q3Pool - 2 * medPool) / log(3)
           if (a2 <= 0 || abs(a3) / a2 > 1.667)
           {
-            PLE <- "Quartiles too skewed to simulate"
-            PGE <- NA
+            P <- "Quartiles too skewed to simulate"
           } else {
           if ((m*N) < 1000000000)
           {
@@ -126,8 +138,7 @@ P_Calc <- function(TRIAL, DATA, CategoryNames, m)
           PEQ <- sum(DiffSamples == DiffSample) / m1
           # lower mid-p tail toward homogeneity, same convention as the
           # mean branch
-          PLE <- sum(DiffSamples < DiffSample)/m1 + PEQ/2
-          PGE <- sum(DiffSamples > DiffSample)/m1 + PEQ/2
+          P <- sum(DiffSamples < DiffSample)/m1 + PEQ/2
           }
           }
         }
@@ -204,18 +215,18 @@ P_Calc <- function(TRIAL, DATA, CategoryNames, m)
 
           PEQ <- sum(DiffSamples == DiffSample) / m1
           # Mid-p convention (Steve's decision, 2026-08-16): simulated ties
-          # count HALF, so PLE = P(<) + PEQ/2 and PLE + PGE = 1 exactly.
-          # Rounding makes DiffSamples discrete, so ties are common and the
-          # choice matters. Previously ties counted fully into BOTH tails,
-          # which inflated p in whichever direction was reported. Evidence
+          # count HALF, so P = P(<) + PEQ/2. Rounding makes DiffSamples
+          # discrete, so ties are common and the choice matters. Evidence
           # for mid-p: the issue-3 pilot against Carlisle's stored 2017
-          # values - full-tie PLE disagreed with median |diff| 0.076,
+          # values - full-tie counting disagreed with median |diff| 0.076,
           # always ours-higher (the tie-inflation signature); as mid-p,
           # per-trial r = 0.995 with 93% within 0.05. Carlisle's published
           # values are, in effect, mid-p, and mid-p is the standard
           # recommendation for discrete test statistics.
-          PLE <- sum(DiffSamples < DiffSample)/m1 + PEQ/2
-          PGE <- sum(DiffSamples > DiffSample)/m1 + PEQ/2
+          # One-sided toward homogeneity (issue 6): this lower tail is the
+          # only direction reported. This line is bit-identical to the
+          # Carlisle-validated implementation.
+          P <- sum(DiffSamples < DiffSample)/m1 + PEQ/2
         } else {
           # FIX: drop = FALSE added. With a single category column,
           # ROWS[,CategoryNames] dropped to a bare vector and the
@@ -227,30 +238,42 @@ P_Calc <- function(TRIAL, DATA, CategoryNames, m)
             if (all(is.na(ROWS[,NAME])))
               ROWS[,NAME] <- NULL
           }
-          # FIX: was chisq.test(ROWS, simulate.p.value = m). A numeric
-          # simulate.p.value is simply treated as TRUE and the replicate
-          # count stays at chisq.test's DEFAULT of 2000 - the m replicates
-          # were never run. The replicate count is the separate B argument.
-          PLE <- chisq.test(ROWS, simulate.p.value=TRUE, B=m)$p.value
-          PGE <- 1-PLE
+        # One-sided toward homogeneity (issue 6, 2026-08-17): this
+        # REVERSES the categorical direction. The previous code reported
+        # chisq.test's simulated p, which is the UPPER tail - small when
+        # the arms differ MORE than chance. For fraud detection the
+        # alarming direction is the opposite one: fabricated categorical
+        # baselines tend to be TOO SIMILAR across arms (a too-small
+        # chi-square). So simulate the same null chisq.test uses -
+        # contingency tables with the observed margins, via r2dtable -
+        # and take the LOWER mid-p tail of the chi-square statistic,
+        # exactly parallel to the continuous branch. (chisq.test itself
+        # only offers the upper tail, and hides its tie counts, which is
+        # why this simulates directly rather than transforming its p.)
+        # Expected cells use the classical formula; ties are exact
+        # because every statistic comes from the same integer margins.
+          tab <- as.matrix(ROWS)
+          E <- outer(rowSums(tab), colSums(tab)) / sum(tab)
+          statObs <- sum((tab - E)^2 / E)
+          statSim <- vapply(
+            r2dtable(m, rowSums(tab), colSums(tab)),
+            function(s) sum((s - E)^2 / E), numeric(1))
+          PEQ <- sum(statSim == statObs) / m
+          P <- sum(statSim < statObs)/m + PEQ/2
         }
         # Need to be sure P != 0 or 1. (Guarded: the median/IQR branch can
         # refuse a row with a message string instead of a number.)
-        if (is.numeric(PLE))
+        if (is.numeric(P))
         {
-          if(PLE == 1) PLE <- 0.999
-          if(PLE == 0) PLE <- 0.001
-          if(PGE == 1) PGE <- 0.999
-          if(PGE == 0) PGE <- 0.001
-          PLE = as.character(signif(PLE,4))
-          PGE = as.character(signif(PGE, 4))
+          if(P == 1) P <- 0.999
+          if(P == 0) P <- 0.001
+          P = as.character(signif(P,4))
         }
       } else {
-        PLE = "Only 1 Row"
-        PGE = NA
+        P = "Only 1 Row"
       }
 
-      c(as.character(Row), PLE, PGE)
+      c(as.character(Row), P)
     }
   # FIX: removed "%seed% TRUE" after the closing brace. %seed% is
   # doFuture's operator for seeding a %dofuture% loop; chained after %do%
@@ -259,8 +282,9 @@ P_Calc <- function(TRIAL, DATA, CategoryNames, m)
   # dqset.seed() if reproducible simulations are ever needed.)
 
   # This bizarre code is because if there is only 1 row, R creates a data.frame
-  # with 3 columns and 1 row.
-  if (length(x) == 3)
+  # with 2 columns and 1 row. (Was length 3 before issue 6 dropped the
+  # heterogeneity column.)
+  if (length(x) == 2)
   {
     x <- as.data.frame(t(x))
   } else {
@@ -270,7 +294,7 @@ P_Calc <- function(TRIAL, DATA, CategoryNames, m)
   x <- cbind(NA, x)
   x[1,1] <- TRIAL
   x <- as.data.frame(x)
-  names(x) <- c("TRIAL", "ROW", "PLE", "PGE")
+  names(x) <- c("TRIAL", "ROW", "P")
   # FIX: was x[match(x$ROW, RowIDs),] - the arguments were reversed, which
   # applies the INVERSE permutation. Harmless today only because %do%
   # returns results already in RowIDs order; it would silently scramble row
@@ -279,46 +303,31 @@ P_Calc <- function(TRIAL, DATA, CategoryNames, m)
   # (Also removed the leftover cat()/print() debugging output here.)
   x <- x[match(RowIDs, x$ROW),]
 
-  PLEvalues <- as.numeric(x$PLE)
-  PGEvalues <- as.numeric(x$PGE)
+  Pvalues <- as.numeric(x$P)
+  Pvalues <- Pvalues[!is.na(Pvalues)]
 
-  PLEvalues <- PLEvalues[!is.na(PLEvalues)]
-  PGEvalues <- PGEvalues[!is.na(PGEvalues)]
-
-  if (length(PLEvalues) > 1)
+  if (length(Pvalues) > 1)
   {
-    PLE <- signif(sumz(PLEvalues)$p,4)
+    P <- signif(sumz(Pvalues)$p,4)
   } else {
-    # FIX: was length(PLEvalues == 1), i.e. the length of a comparison
+    # FIX: was length(Pvalues == 1), i.e. the length of a comparison
     # vector, not a comparison of the length. It worked by coincidence
     # (length 1 -> 1 -> truthy; length 0 -> 0 -> falsy) but was a trap.
-    if (length(PLEvalues) == 1)
-      PLE <- PLEvalues
-    if (length(PLEvalues)==0)
-      PLE = "No values"
-  }
-
-  if (length(PGEvalues) > 1)
-  {
-    PGE <- signif(sumz(PGEvalues)$p,4)
-  } else {
-    # FIX: same length(x == 1) -> length(x) == 1 typo as PLE above
-    if (length(PGEvalues) == 1)
-      PGE <- PGEvalues
-    if (length(PGEvalues)==0)
-      PGE = "No values"
+    if (length(Pvalues) == 1)
+      P <- Pvalues
+    if (length(Pvalues)==0)
+      P = "No values"
   }
 
   lastline <- data.frame(
     TRIAL = c(NA, NA),
     ROW = c("Summary", NA),
-    PLE = c(as.character(PLE), NA),
-    PGE = c(as.character(PGE), NA)
+    P = c(as.character(P), NA)
   )
 
   x <- rbind(x, lastline)
   outputComments(
-    paste0("Trial ", TRIAL,": p = ", PLE, "\n")
+    paste0("Trial ", TRIAL,": p = ", P, "\n")
   )
   return(x)
 }
