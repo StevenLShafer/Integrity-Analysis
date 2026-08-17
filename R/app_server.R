@@ -102,7 +102,7 @@ app_server <- function(input, output, session) {
   output$dataGrid <- rhandsontable::renderRHandsontable({
     d <- reactiveData()
     if (is.null(d)) return(NULL)
-    rhandsontable::rhandsontable(
+    w <- rhandsontable::rhandsontable(
       d,
       # cap the widget height; rhandsontable scrolls and virtualizes rows
       height = min(400, 60 + 24 * nrow(d)),
@@ -115,6 +115,29 @@ app_server <- function(input, output, session) {
       # are recognized by being extra named integer columns).
       rhandsontable::hot_context_menu(allowRowEdit = TRUE,
                                       allowColEdit = FALSE)
+    # Column display formats (Steve, 2026-08-17): rhandsontable's numeric
+    # default shows two decimals, which made counts and the rounding
+    # columns read as "25.00". Whole-number columns display as integers;
+    # measurement columns (MEAN/SD/SE) keep their decimals as typed (up
+    # to five, trailing zeros dropped). MEAN/SD/SE are never
+    # integer-formatted even when their values happen to be whole,
+    # because numbro's "0" format would DISPLAY a later-typed 63.5 as 64
+    # while storing 63.5 - a lie on screen.
+    measureCols <- intersect(c("MEAN", "SD", "SE"), names(d))
+    for (nm in names(d)) {
+      v <- d[[nm]]
+      if (!is.numeric(v)) next
+      if (nm %in% measureCols) {
+        w <- rhandsontable::hot_col(w, nm, format = "0.[00000]")
+      } else if (all(is.na(v) | v %% 1 == 0)) {
+        # N, ROUND_MEAN, ROUND_DISPERSION, ROUND_OBSERVATION, category
+        # counts - anything whole-numbered
+        w <- rhandsontable::hot_col(w, nm, format = "0")
+      } else {
+        w <- rhandsontable::hot_col(w, nm, format = "0.[00000]")
+      }
+    }
+    w
   })
 
   output$validateButton <- renderUI({
