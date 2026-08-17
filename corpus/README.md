@@ -16,6 +16,7 @@ concrete failures in hand.
   | Column | Meaning |
   |---|---|
   | `PDF` | path relative to the corpus root (journal/year/file) |
+  | `PMID` | PubMed ID where known (79.7%): from the filename for `PMID_<n>.pdf` files, else from `pmid_map.csv` — the committed lookup holding PMIDs recovered by OCR of printed citation lines (scanned EJA papers). Blank means no PMID has ever been matched for that file |
   | `OUTCOME` | `successfully parsed` / `not successfully parsed` — did the **deterministic** engine return a baseline table (AI fallback never used here, so the sheet measures exactly the code in `R/`) |
   | `COMMENTS` | success: the steps (table page found, layout, arms and how many carry an N, lines → variables, continuous rows, skipped lines, runtime). Failure: **where** the process stopped (table-page identification, or parsing after the page was found) and the error |
   | `PAGE … SECONDS` | the same diagnostics as raw columns, so analyses need not parse `COMMENTS` |
@@ -52,6 +53,24 @@ builds its own synthetic PDFs with the `pdf()` device
 - Ground truth for scoring value-level accuracy: Carlisle's spreadsheets
   at the repository root (see AGENTS.md; the `One Sheet` file's A&A
   numbering drifts by +1 from trial 1235 — see ISSUES.md issue 3).
+
+## The local test set
+
+Seven PDFs sit in this folder locally (gitignored — they are copyrighted
+articles) for hand-testing PRs in the app. Each exercises a different
+parsing challenge; the original corpus file is in the name, so its row in
+`ParseOutcomes.csv` has the full diagnostics. Expected behavior when
+uploaded to the app:
+
+| File | Challenge | Expected in the app |
+|---|---|---|
+| `Test1_clean_…` | fully parseable, 2 arms with N, 10 continuous rows | parses, validates, **Analyze runs** (p ≈ 0.78) |
+| `Test2_missingN_…` | table parsed but **no arm carries an N** (5 arms, 20 continuous rows) | parses; validation flags every row's missing N; fix via grid or extracted-table download |
+| `Test3_categorical_…` | parses with **no continuous rows** — categories only | parses; chi-square-only analysis path |
+| `Test4_skippedlines_…` | 29 of its table lines are **skipped as unusable** | parses; the log lists every skipped line and why |
+| `Test5_scanned_…` | **scanned image, no text layer** | fast clean failure: "scanned image" message, Template guidance |
+| `Test6_hang_…` | **poppler does not finish** — the parser subprocess hits its timeout | ~60 s wait, then clean failure; the app must stay responsive |
+| `PMID_12693995.pdf` | text layer present but **table-page identification declines** | fast clean failure; prime optimization-loop material |
 
 ## Ground rules for optimization passes
 

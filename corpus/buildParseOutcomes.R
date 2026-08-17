@@ -92,6 +92,27 @@ out <- data.frame(
   CONTINUOUS = S$continuous, SKIPPED    = S$skipped,
   SECONDS    = S$seconds,
   stringsAsFactors = FALSE)
+
+# PMID column: from the filename where the file is named PMID_<n>.pdf,
+# otherwise from corpus/pmid_map.csv (the committed lookup - it holds the
+# PMIDs recovered by OCR of printed citation lines for scanned papers,
+# which no regeneration could rediscover from the outcomes alone).
+out$PMID <- NA_character_
+i <- grepl("^PMID_\\d+\\.pdf$", basename(out$PDF))
+out$PMID[i] <- sub("^PMID_(\\d+)\\.pdf$", "\\1", basename(out$PDF[i]))
+pmidMapPath <- "pmid_map.csv"
+selfDir <- dirname(sub("--file=", "",
+             grep("^--file=", commandArgs(FALSE), value = TRUE)[1]))
+if (!is.na(selfDir) && nzchar(selfDir))
+  pmidMapPath <- file.path(selfDir, "pmid_map.csv")
+if (file.exists(pmidMapPath)) {
+  pm <- read.csv(pmidMapPath, stringsAsFactors = FALSE,
+                 colClasses = "character")
+  j <- match(out$PDF, pm$PDF)
+  out$PMID[is.na(out$PMID) & !is.na(j)] <-
+    pm$PMID[j[is.na(out$PMID) & !is.na(j)]]
+}
+out <- out[, c("PDF", "PMID", setdiff(names(out), c("PDF", "PMID")))]
 out <- out[order(out$PDF), ]
 
 dest <- file.path(dirname(sub("--file=", "",
