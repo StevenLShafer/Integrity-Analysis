@@ -123,11 +123,42 @@ app_server <- function(input, output, session) {
   # each validation pass writes line-by-line messages to the comments
   # log, and firing it on every cell edit would bury the user in output.
 
+  # Issue 13 (Steve's design): validation problems paint their CELLS -
+  # yellow = missing, red = unreadable, blue = incongruent - so review
+  # means looking at the table, not reading a log. rIssues holds the
+  # (row, col, code) map from the last validateData pass.
+  rIssues <- reactiveVal(NULL)
+
+  output$issueLegend <- renderUI({
+    if (is.null(rIssues())) return(NULL)
+    box <- function(color, label) tagList(
+      span(style = paste0("display:inline-block; width:14px; height:14px;",
+                          "background:", color, "; border:1px solid #999;",
+                          "vertical-align:middle; margin-right:4px;")),
+      span(label, style = "margin-right: 16px;"))
+    div(style = "margin: 4px 0 8px 0; font-size: 13px;",
+        box("#fff3b0", "missing"),
+        box("#f4b6b6", "unreadable"),
+        box("#b8d0f0", "incongruent"))
+  })
+
   output$dataGrid <- rhandsontable::renderRHandsontable({
     d <- reactiveData()
     if (is.null(d)) return(NULL)
+    # cell-issue payload for the renderer: keys "row|col", 0-based
+    issPayload <- NULL
+    iss <- rIssues()
+    if (!is.null(iss)) {
+      ci <- match(iss$col, names(d))
+      ok <- !is.na(ci) & iss$row <= nrow(d)
+      if (any(ok)) {
+        issPayload <- as.list(iss$code[ok])
+        names(issPayload) <- paste0(iss$row[ok] - 1, "|", ci[ok] - 1)
+      }
+    }
     w <- rhandsontable::rhandsontable(
       d,
+      cellIssues = issPayload,
       # cap the widget height; rhandsontable scrolls and virtualizes rows
       height = min(400, 60 + 24 * nrow(d)),
       rowHeaders = TRUE) |>
@@ -147,18 +178,43 @@ app_server <- function(input, output, session) {
     # integer-formatted even when their values happen to be whole,
     # because numbro's "0" format would DISPLAY a later-typed 63.5 as 64
     # while storing 63.5 - a lie on screen.
+    # Issue-13 painting renderer: delegate to the type-appropriate base
+    # renderer (numeric keeps its numericFormat pattern), then color the
+    # background if this cell is in the issue map. Applied per column so
+    # the format specs above stay effective; row/column highlight is
+    # class-based and unaffected.
+    paintJS <- paste0(
+      "function(instance, td, row, col, prop, value, cellProperties) {",
+      "  var base = cellProperties.type === 'numeric' ?",
+      "    Handsontable.renderers.NumericRenderer :",
+      "    Handsontable.renderers.TextRenderer;",
+      "  base.apply(this, arguments);",
+      "  var iss = instance.params ? instance.params.cellIssues : null;",
+      "  if (iss) {",
+      "    var code = iss[row + '|' + col];",
+      "    if (code === 'missing') td.style.background = '#fff3b0';",
+      "    else if (code === 'unreadable') td.style.background = '#f4b6b6';",
+      "    else if (code === 'incongruent') td.style.background = '#b8d0f0';",
+      "  }",
+      "}")
     measureCols <- intersect(c("MEAN", "SD", "SE"), names(d))
     for (nm in names(d)) {
       v <- d[[nm]]
-      if (!is.numeric(v)) next
+      if (!is.numeric(v)) {
+        w <- rhandsontable::hot_col(w, nm, renderer = paintJS)
+        next
+      }
       if (nm %in% measureCols) {
-        w <- rhandsontable::hot_col(w, nm, format = "0.[00000]")
+        w <- rhandsontable::hot_col(w, nm, format = "0.[00000]",
+                                    renderer = paintJS)
       } else if (all(is.na(v) | v %% 1 == 0)) {
         # N, ROUND_MEAN, ROUND_DISPERSION, ROUND_OBSERVATION, category
         # counts - anything whole-numbered
-        w <- rhandsontable::hot_col(w, nm, format = "0")
+        w <- rhandsontable::hot_col(w, nm, format = "0",
+                                    renderer = paintJS)
       } else {
-        w <- rhandsontable::hot_col(w, nm, format = "0.[00000]")
+        w <- rhandsontable::hot_col(w, nm, format = "0.[00000]",
+                                    renderer = paintJS)
       }
     }
     w
@@ -248,6 +304,7 @@ app_server <- function(input, output, session) {
     output$downloadButton <- NULL
     reactiveDataValidated(NULL)
     output$GoButton <- NULL
+    rIssues(NULL)   # revalidation will re-derive the cell-issue colors
     reactiveData(edited)
   })
 
@@ -265,6 +322,7 @@ app_server <- function(input, output, session) {
     reactiveDataValidated(NULL)
     output$GoButton <- NULL
     output$downloadButton <- NULL
+    rIssues(NULL)   # fresh empty table - no issue colors yet
     blank <- data.frame(
       TRIAL = rep(NA_character_, 8), ROW = NA_character_,
       N = NA_real_, MEAN = NA_real_, SD = NA_real_, SE = NA_real_,
@@ -361,6 +419,7 @@ app_server <- function(input, output, session) {
       reactiveDataValidated(NULL)
       output$GoButton <- NULL
       output$downloadButton <- NULL
+      rIssues(NULL)   # new upload - stale issue colors must not carry over
 
       # Multi-file upload (Steve's request, 2026-08-17): any mix of
       # csv/xls/xlsx/PDF in one selection. Every file becomes a data
@@ -537,8 +596,20 @@ app_server <- function(input, output, session) {
       # outputComments() and returns the derived state; assignment to the
       # per-session variables stays here, where the session is.
       v <- validateData(DATA)
+      # Issue 13: publish the cell-issue map (colors) from this pass -
+      # including the soft warnings a successful pass can carry.
+      rIssues(if (!is.null(v$issues) && nrow(v$issues) > 0) v$issues
+              else NULL)
       if (v$FAIL)
       {
+        # Show the NORMALIZED frame the issues index into (validateData
+        # returns it pre-sort). skipValidation prevents this reactive
+        # write from re-triggering validation on the same data.
+        if (!is.null(v$DATA))
+        {
+          skipValidation <<- TRUE
+          reactiveData(v$DATA)
+        }
         return()
       }
 

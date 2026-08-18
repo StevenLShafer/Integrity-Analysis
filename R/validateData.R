@@ -58,6 +58,22 @@ is_category <- function(x) {
 validateData <- function(DATA) {
   FAIL <- FALSE
 
+  # Per-cell issue map (issue 13, Steve's design 2026-08-17, implemented
+  # 2026-08-18): every problem the per-line checks flag is ALSO recorded
+  # against its cell, so the grid can paint it - yellow = missing,
+  # red = unreadable (text where a number belongs), blue = incongruent
+  # (a value that contradicts the row's type). The comments log remains
+  # the detail view; the colors are the map. The same codes are the API
+  # spec's machine-readable issues[] (docs/api-spec.md).
+  issues <- list()
+  addIssue <- function(row, col, code)
+    issues[[length(issues) + 1]] <<- data.frame(
+      row = row, col = col, code = code, stringsAsFactors = FALSE)
+  issueFrame <- function() {
+    if (length(issues) == 0) return(NULL)
+    do.call(rbind, issues)
+  }
+
   names(DATA) <- toupper(trimws(names(DATA)))
   ColumnNames <- names(DATA)
   outputComments(paste("Column names:", paste(ColumnNames, collapse = ", ")))
@@ -146,13 +162,25 @@ validateData <- function(DATA) {
   # turns non-numeric cells into NA, which those checks then report to
   # the user line by line instead of crashing. Q1/Q3 and SE included
   # (2026-08-17, median/IQR support).
+  unreadable <- list()   # (row, col) cells that held TEXT where a number
+                         # belongs - coerced to NA below, but remembered
+                         # so the grid paints them red, not yellow
   for (col in c("N", "MEAN", "SD", "SE", "Q1", "Q3"))
   {
     if (!is.null(DATA[[col]]) && !is.numeric(DATA[[col]]))
     {
+      before <- !is.na(DATA[[col]]) &
+                trimws(as.character(DATA[[col]])) != ""
       DATA[[col]] <- suppressWarnings(as.numeric(DATA[[col]]))
+      bad <- which(before & is.na(DATA[[col]]))
+      for (i in bad) {
+        addIssue(i, col, "unreadable")
+        unreadable[[paste(i, col)]] <- TRUE
+      }
     }
   }
+  isUnreadable <- function(row, col)
+    isTRUE(unreadable[[paste(row, col)]])
 
   # Add rounding column for the mean
   MeanColumns <- grep("MEAN", ColumnNames)
@@ -221,6 +249,18 @@ validateData <- function(DATA) {
     {
       if (!is_category(DATA[,CategoryNames[i]]))
       {
+        # Issue 13: a column that LOOKS like a category (numeric, has
+        # NAs) but is rejected only because some values are not
+        # integers gets those cells painted blue - Steve's canonical
+        # "incongruent" example. Columns rejected for other reasons
+        # (text, no NAs) are ordinary Misc columns, not errors.
+        v <- DATA[[CategoryNames[i]]]
+        if (is.numeric(v) && any(is.na(v)) &&
+            any(!is.na(v) & v %% 1 != 0))
+        {
+          for (r in which(!is.na(v) & v %% 1 != 0))
+            addIssue(r, CategoryNames[i], "incongruent")
+        }
         MiscNames <- c(MiscNames, CategoryNames[i])
         CategoryNames[i] <- "XXXXX"
       }
@@ -259,6 +299,9 @@ validateData <- function(DATA) {
         }
         outputComments(paste("This appears to be a category. However, it has entries for continuous variables."))
         outputComments(paste("Specifically: ", message))
+        for (cn in intersect(c("N", "MEAN", "SD", "Q1", "Q3"),
+                             names(DATA)))
+          if (!is.na(DATA[[cn]][i])) addIssue(i, cn, "incongruent")
         FAIL <- TRUE
       }
     } else if (("Q1" %in% names(DATA) && !is.na(DATA$Q1[i])) ||
@@ -277,6 +320,7 @@ validateData <- function(DATA) {
         outputComments(paste(
           "This row reports quartiles, but only one of Q1/Q3 is filled",
           "in. A median row needs both."))
+        addIssue(i, if (hasQ1) "Q3" else "Q1", "missing")
         FAIL <- TRUE
       } else if (is.na(DATA$N[i]) || is.na(DATA$MEAN[i]))
       {
@@ -284,6 +328,9 @@ validateData <- function(DATA) {
         outputComments(paste(
           "This is a median/IQR row (Q1 and Q3 are filled in), so it",
           "needs N and the median in the MEAN column."))
+        for (cn in c("N", "MEAN"))
+          if (is.na(DATA[[cn]][i]) && !isUnreadable(i, cn))
+            addIssue(i, cn, "missing")
         FAIL <- TRUE
       } else if (!is.na(DATA$SD[i]) ||
                  ("SE" %in% names(DATA) && !is.na(DATA$SE[i])))
@@ -293,6 +340,8 @@ validateData <- function(DATA) {
           "This row has quartiles AND an SD or SE. With Q1/Q3 filled in,",
           "MEAN is read as the MEDIAN - remove either the quartiles or",
           "the SD/SE so the row is unambiguous."))
+        for (cn in intersect(c("SD", "SE"), names(DATA)))
+          if (!is.na(DATA[[cn]][i])) addIssue(i, cn, "incongruent")
         FAIL <- TRUE
       } else if (DATA$Q1[i] > DATA$MEAN[i] || DATA$MEAN[i] > DATA$Q3[i])
       {
@@ -300,6 +349,7 @@ validateData <- function(DATA) {
         outputComments(paste0(
           "The median must lie between its quartiles: Q1 = ", DATA$Q1[i],
           ", median = ", DATA$MEAN[i], ", Q3 = ", DATA$Q3[i], "."))
+        for (cn in c("MEAN", "Q1", "Q3")) addIssue(i, cn, "incongruent")
         FAIL <- TRUE
       } else {
         # median printed with decimals bumps ROUND_MEAN, same as a mean
@@ -339,6 +389,9 @@ validateData <- function(DATA) {
             "Enter the SD, or convert the SE yourself - the conversion ",
             "needs N and is a decision about the analysis, so it is not ",
             "made for you."))
+        for (cn in c("N", "MEAN", "SD"))
+          if (is.na(DATA[[cn]][i]) && !isUnreadable(i, cn))
+            addIssue(i, cn, "missing")
         FAIL <- TRUE
       } else {
         # Fix MEAN digits if Mean has any decimal digits
@@ -363,7 +416,13 @@ validateData <- function(DATA) {
   if (FAIL)
   {
     outputComments("There are one or more errors in the data table. Please review the above messages to address these.")
-    return(list(FAIL = TRUE))
+    outputComments(paste(
+      "Problem cells are colored in the table above: yellow = missing,",
+      "red = unreadable, blue = incongruent."))
+    # Issue 13: return the NORMALIZED frame (pre-sort, so issue row
+    # numbers still index it) together with the cell issues, so the grid
+    # can display the very frame the issues refer to.
+    return(list(FAIL = TRUE, DATA = DATA, issues = issueFrame()))
   }
   # Carry SE, Q1/Q3, and ROUND_DISPERSION through when the input supplies
   # them. They are optional: a spreadsheet typed by hand, or written
@@ -374,7 +433,10 @@ validateData <- function(DATA) {
   DATA <- DATA[order(DATA$TRIAL, DATA$ROW),]
   TRIALS <- unique(DATA$TRIAL)
 
+  # issues can be non-empty on success (e.g. non-integer values in a
+  # would-be category column, filed as Misc): soft warnings, painted but
+  # not blocking.
   list(FAIL = FALSE, DATA = DATA, TRIALS = TRIALS,
        ColumnNames = ColumnNames, CategoryNames = CategoryNames,
-       MiscNames = MiscNames)
+       MiscNames = MiscNames, issues = issueFrame())
 }
