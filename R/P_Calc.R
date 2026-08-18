@@ -350,7 +350,8 @@ P_Calc <- function(TRIAL, DATA, CategoryNames, m)
   x <- x[, c("TRIAL", "ROW", "P", "CI95", "M")]
   outputComments(
     paste0("Trial ", TRIAL,": p = ", P,
-           if (nzchar(ciStr)) paste0(" (95% MC interval ", ciStr, ")")
+           if (nzchar(ciStr)) paste0(" (95% Monte Carlo interval ",
+                                     ciStr, ")")
            else "", "\n")
   )
   return(x)

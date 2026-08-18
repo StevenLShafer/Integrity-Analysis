@@ -63,7 +63,7 @@ challenged, so it reports only what the simulation actually supports.
    the rows' simulation uncertainty, which is propagated (parametric
    bootstrap over the rows' binomial counts) and shown as a 95% Monte
    Carlo interval whenever the trial p < 0.001, e.g.
-   "p = 3.1e-07 (95% MC interval 1.2e-07 to 8.9e-07)".
+   "p = 3.1e-07 (95% Monte Carlo interval 1.2e-07 to 8.9e-07)".
 
 ## Reading the results table
 
