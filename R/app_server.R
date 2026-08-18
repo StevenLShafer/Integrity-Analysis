@@ -559,7 +559,9 @@ app_server <- function(input, output, session) {
       output$GoButton <- NULL
       output$downloadButton <- NULL
       rIssues(NULL)   # new upload - stale issue colors must not carry over
-      parseSkips(NULL)
+      # parseSkips is NOT cleared here: uploads APPEND (PR #25), so skip
+      # rows from earlier uploads remain in the table and must keep their
+      # red ROW cell and reason. The blank-table reset clears it.
 
       # Multi-file upload (Steve's request, 2026-08-17): any mix of
       # csv/xls/xlsx/PDF in one selection. Every file becomes a data
@@ -595,6 +597,26 @@ app_server <- function(input, output, session) {
       if (nrow(files) == 0) return()
 
       frames <- list()
+
+      # Sequential uploads APPEND (Steve, 2026-08-19): the current table
+      # - including any edits typed into the grid but not yet
+      # revalidated - becomes the first "frame", so a later upload adds
+      # rows instead of replacing everything. The existing combining
+      # machinery then handles column union and trial disambiguation
+      # exactly as it does across files in one selection (the current
+      # table's trials are seeded first, so a clashing new file gets the
+      # "filename: " prefix, never the other way around). Start With an
+      # Empty Table remains the way to start over. All-empty rows (the
+      # blank starter's untyped placeholders) are dropped first.
+      prior <- currentGrid()
+      if (!is.null(prior) && nrow(prior) > 0) {
+        keep <- apply(prior, 1, function(r)
+          any(!is.na(r) & trimws(as.character(r)) != ""))
+        prior <- prior[keep, , drop = FALSE]
+        if (nrow(prior) > 0)
+          frames[[1]] <- list(stem = "Existing table", data = prior)
+      }
+      nPrior <- length(frames)
 
       readSheet <- function(path, ext) {
         if (ext == "csv")  return(read.csv(path))
@@ -673,8 +695,12 @@ app_server <- function(input, output, session) {
         }
       }
 
-      if (length(frames) == 0) {
-        outputComments(paste(
+      if (length(frames) == nPrior) {
+        # no NEW file produced a table; leave the existing table alone
+        outputComments(if (nPrior > 0) paste(
+          "No uploaded file produced a usable table; the existing table",
+          "is unchanged.")
+        else paste(
           "No file produced a usable table. You can enter the data by",
           "hand: use Start With an Empty Table, or fill in the Template",
           "spreadsheet (sidebar) and upload it."))
@@ -711,20 +737,31 @@ app_server <- function(input, output, session) {
         for (nm in setdiff(allCols, names(d))) d[[nm]] <- NA
         d[, allCols, drop = FALSE]
       }))
-      if (length(frames) > 1)
+      if (nPrior > 0) {
+        outputComments(paste0(
+          "Appended ", length(frames) - nPrior, " file(s) to the ",
+          "existing table: now ", nrow(DATA), " rows, ",
+          length(unique(DATA$TRIAL)), " trial(s)."))
+      } else if (length(frames) > 1) {
         outputComments(paste0("Combined ", length(frames), " file(s): ",
                               nrow(DATA), " rows, ",
                               length(unique(DATA$TRIAL)), " trial(s)."))
+      }
       # Register the parser's skipped lines under each frame's FINAL
       # trial value (disambiguation above may have prefixed it) so the
-      # grid renderer can find and paint their rows.
+      # grid renderer can find and paint their rows. With appending
+      # uploads (PR #25) the registry ACCUMULATES: skip rows from
+      # earlier uploads are still in the table, so their entries must
+      # survive this upload (an entry whose row was since fixed or
+      # deleted simply stops matching); unique() keeps any
+      # re-registration harmless.
       skipReg <- do.call(rbind, lapply(frames, function(f) {
         if (is.null(f$skips)) return(NULL)
         data.frame(TRIAL = as.character(f$data$TRIAL[1]),
                    ROW = f$skips$label, reason = f$skips$reason,
                    stringsAsFactors = FALSE)
       }))
-      parseSkips(skipReg)
+      parseSkips(unique(rbind(parseSkips(), skipReg)))
       reactiveData(DATA)
     }
   )
