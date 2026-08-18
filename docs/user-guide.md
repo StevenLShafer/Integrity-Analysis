@@ -250,12 +250,13 @@ lines sit. The same ROW name ("Age") can appear in any number of trials.
 ## Column-name flexibility
 
 Column names are case-insensitive and trimmed. The first column
-containing "TRIAL" becomes TRIAL, "ROW" becomes ROW, "MEAN" becomes MEAN
-(a *second* column containing "MEAN" becomes ROUND MEAN), and the first
-column containing "OBS" becomes ROUND OBSERVATION — so "Baseline Mean"
-or "My Trial ID" are understood. Carlisle's 2017 spreadsheet columns
-(`MEASURE`, `DECM`, `NUMBER`) are also accepted. Unrecognized columns
-are carried along untouched and ignored by the analysis.
+containing "TRIAL" becomes TRIAL and "ROW" becomes ROW — so "My Trial
+ID" or "Row Label" are understood. `MEAN`, `N`, and `SD` must be named
+exactly that (any capitalization); an *additional* column containing
+"MEAN" becomes ROUND MEAN, and the first column containing "OBS" becomes
+ROUND OBSERVATION. Carlisle's 2017 spreadsheet columns (`MEASURE`,
+`DECM`, `NUMBER`) are also accepted. Unrecognized columns are carried
+along untouched and ignored by the analysis.
 
 # The analysis
 

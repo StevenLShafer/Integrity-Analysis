@@ -33,8 +33,14 @@ No renv (deliberate — see the plan). Since the ParsePDF fold-in
 (2026-08-17, issue 9) the package also contains the PDF parser
 (`R/parseBaselineTable*.R`, `tokenize.R`, `pageLayout.R`, `aiFallback.R`,
 `utils.R`, `writeIntegrityTemplate.R`, all internals `.pp`-prefixed) and
-its ~295-assertion testthat suite (`tests/testthat/`, synthetic PDFs, no
-fixtures needed); app-side tests are still to come (issue 4).
+its testthat suite. Since the issue-4 consolidation (2026-08-19) the
+suite (`tests/testthat/`, 514 assertions) also covers the app side -
+input contract, known-answer Monte Carlo under fixed seeds, the full
+headless pipeline, grid mechanics, round trips - all from synthetic data
+and synthetic PDFs, no corpus or Carlisle files needed. When testing
+uploads with `shiny::testServer`, ALWAYS stage a copy of the file in its
+own subdirectory of `tempdir()` and upload the copy - the purge-on-exit
+handler deletes uploaded paths.
 
 The upload pipeline (since 2026-08-17 all input modes converge on one
 editable grid — Steve's original vision): file (csv/xls/xlsx, **or an
