@@ -52,6 +52,7 @@ Collate:
   outputComments.R
   validateData.R
   P_Calc.R
+  baselineTable.R
   app_ui.R
   app_server.R
   app_run.R
