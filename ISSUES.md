@@ -210,22 +210,7 @@ ran under), and decide how far to adjudicate the 112 unexplained outliers.
 
 ## 4. Build a comprehensive test suite
 
-The repository currently has no automated tests.
-
-Priorities, roughly in order of what would catch the most:
-
-- The **input contract**: column-name normalisation (`MEAN`-containing names
-  that are not `MEAN` become `ROUND_MEAN`; `OBS` becomes `ROUND_OBSERVATION`),
-  and the `is_category` rule (numeric, integer-valued, at least one `NA`).
-- **Known-answer Monte Carlo cases** with a fixed seed, so a refactor cannot
-  silently change results.
-- **Degenerate inputs**: one arm, one variable, zero-SD rows, an arm with N = 1,
-  missing N, a category column that sums to more than the arm N.
-- **Round-trip**: a spreadsheet written by the app re-imports unchanged.
-
-ParsePDF's suite is a reasonable model — it builds its own PDFs with the `pdf()`
-device rather than shipping copyrighted articles, and every regression it has
-found is pinned by a fixture.
+**Closed 2026-08-19** - see the Closed section at the bottom.
 
 ---
 
@@ -614,4 +599,29 @@ api-spec open decision).
 
 ## Closed
 
-*(nothing yet)*
+### 4. Build a comprehensive test suite (closed 2026-08-19)
+
+Done across the 2026-08 feature PRs and the consolidation PR. The suite
+(tests/testthat/, 514 assertions) now covers every priority the issue
+listed: the input contract (`test-input-contract.R` - name
+normalisation, Carlisle aliases, `is_category`, graceful failure on
+missing required columns, which was found CRASHING the session and
+fixed in the same PR); known-answer Monte Carlo under fixed seeds
+(`test-known-answer.R`, including the documentation's worked example at
+p = 0.0495 and the categorical direction check); degenerate inputs
+(zero-SD arms, N = 1, single arm, degenerate categoricals, single-line
+categoricals, empty rounding columns); and the round-trip
+(`test-app-grid.R` - Download Table re-imports and revalidates
+identically). The app pipeline runs headlessly end to end
+(`test-app-pipeline.R`: upload -> validate -> analyze, re-run
+non-append, purge-on-exit, synthetic-PDF-to-grid-to-analysis), plus the
+feature suites added with their PRs (cell colors, appending uploads,
+baseline view, median/IQR, adaptive m). Everything runs from synthetic
+data and synthetic PDFs - no corpus or Carlisle files needed - so the
+suite is CI-ready (the GitHub Actions issue remains open in the
+restructure plan, phase 5).
+
+TESTING RULE learned the hard way: never hand a real file's path to
+`input$upload` in `testServer` - stage a copy in its own subdirectory
+of `tempdir()` first (the purge-on-exit handler deletes uploaded
+paths).

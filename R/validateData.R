@@ -161,6 +161,15 @@ validateData <- function(DATA) {
     FAIL <- TRUE
   }
 
+  # FIX (found by the consolidated suite, 2026-08-19): a missing required
+  # column must stop here. The per-line checks below index
+  # DATA[i, c("N", "MEAN", "SD")], and running them without those columns
+  # raised "undefined columns selected" - killing the whole session
+  # instead of reporting the structural failure. This is the bare-FAIL
+  # return shape the server already guards for (is.null(v$DATA)).
+  if (FAIL)
+    return(list(FAIL = TRUE))
+
   # FIX: force N, MEAN, and SD to numeric. Excel/CSV files with a stray
   # text cell make the whole column character, and character data in the
   # per-line checks below crashed the app (if (NA) errors). Coercion
