@@ -20,3 +20,6 @@
 ^IntegrityAnalysis\.docx$
 ^data-raw$
 ^corpus$
+^\.claude$
+^.*\.tar\.gz$
+^.*\.Rcheck$

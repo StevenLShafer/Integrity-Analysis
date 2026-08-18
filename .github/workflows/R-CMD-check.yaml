@@ -1,0 +1,58 @@
+# R-CMD-check.yaml - automated checks on every PR and push to main
+# (package-restructure plan, phase 5: "check-standard.yaml first").
+#
+# PROVENANCE: written by Claude Code (model Claude Fable 5), 2026-08-19,
+# adapted from r-lib/actions' check-standard example. Runs the full
+# R CMD check - which includes the 514-assertion testthat suite - on
+# Ubuntu with the current R release. The suite needs no local data:
+# every test builds its own synthetic spreadsheets and PDFs (the corpus
+# and the Carlisle files are never committed), and the AI-fallback
+# tests are offline by construction. pdftools needs poppler, which
+# setup-r-dependencies installs from the DESCRIPTION's SystemRequirements
+# metadata automatically on Ubuntu.
+#
+# The deploy trio (production deploy on push to main; PR-app lifecycle)
+# is deliberately NOT here yet - it needs the SHINY_TOKEN / SHINY_SECRET
+# repository secrets (see the plan).
+
+name: R-CMD-check
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions: read-all
+
+jobs:
+  R-CMD-check:
+    runs-on: ubuntu-latest
+    env:
+      GITHUB_PAT: ${{ secrets.GITHUB_TOKEN }}
+      R_KEEP_PKG_SOURCE: yes
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: r-lib/actions/setup-pandoc@v2
+
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+
+      - uses: r-lib/actions/setup-r-dependencies@v2
+        with:
+          extra-packages: any::rcmdcheck
+          needs: check
+
+      - uses: r-lib/actions/check-r-package@v2
+        with:
+          args: 'c("--no-manual", "--as-cran")'
+          # Fail on ERRORs (which include any test failure) but tolerate
+          # the one known WARNING: run_app() attaches its packages with
+          # library(), the deliberate stanpumpR pattern documented in
+          # R/app_run.R ("qualifying every call with :: is phase 2+
+          # work, if ever"). If that refactor ever lands, tighten this
+          # to the default "warning".
+          error-on: '"error"'
+          upload-snapshots: true
