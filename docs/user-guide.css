@@ -1,0 +1,53 @@
+/* user-guide.css - styling for the rendered user guide
+   (inst/extdata/IntegrityAnalysis.html). Embedded into the HTML by the
+   pandoc command in docs/user-guide.md's header comment. */
+body {
+  font-family: -apple-system, "Segoe UI", Roboto, Helvetica, Arial,
+    sans-serif;
+  line-height: 1.55;
+  color: #222;
+  max-width: 46em;
+  margin: 0 auto;
+  padding: 2em 1.5em 4em;
+}
+h1 {
+  border-bottom: 2px solid #2c6e9e;
+  padding-bottom: 0.2em;
+  color: #1a4c70;
+  margin-top: 2em;
+}
+header h1.title { border-bottom: none; margin-top: 0.5em; }
+h2 { color: #1a4c70; margin-top: 1.6em; }
+#TOC {
+  background: #f4f8fb;
+  border: 1px solid #d5e3ee;
+  border-radius: 6px;
+  padding: 0.8em 1.2em;
+  margin: 1.5em 0;
+}
+#TOC ul { margin: 0.2em 0; padding-left: 1.2em; }
+table {
+  border-collapse: collapse;
+  margin: 1em 0;
+  font-size: 0.95em;
+}
+th, td {
+  border: 1px solid #c8d4dd;
+  padding: 0.35em 0.7em;
+  text-align: left;
+}
+th { background: #eef4f8; }
+code {
+  background: #f2f2f2;
+  padding: 0.1em 0.3em;
+  border-radius: 3px;
+  font-size: 0.92em;
+}
+a { color: #2c6e9e; }
+strong { color: #111; }
+blockquote {
+  border-left: 4px solid #d5e3ee;
+  margin-left: 0;
+  padding-left: 1em;
+  color: #444;
+}
