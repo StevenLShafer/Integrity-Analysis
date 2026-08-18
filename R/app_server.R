@@ -54,6 +54,30 @@ app_server <- function(input, output, session) {
   skipValidation <- FALSE  # one-shot: the blank-table starter sets this so
                            # eight empty rows are not validated (and flagged
                            # line by line) before the user has typed anything
+  uploadedPaths <- character(0)  # every file this session uploaded, for
+                                 # the purge-on-exit guarantee below
+
+  # THE PURGE GUARANTEE (Steve's requirement, 2026-08-17): when the
+  # session ends, no record of the analysis survives. Uploaded files
+  # (manuscript PDFs and spreadsheets) are deleted from disk along with
+  # the per-upload temp directories Shiny created for them; the in-memory
+  # state (data, results, log) dies with the session environment. Nothing
+  # in this app writes analysis content anywhere else: downloads are
+  # generated straight into the response, outputComments() keeps no file
+  # log, and bookmarking is not enabled. Manuscripts under review are
+  # confidential - this is a promise to the people uploading them, and
+  # any future code path that touches an uploaded file must preserve it.
+  session$onSessionEnded(function() {
+    for (p in uploadedPaths) {
+      try(unlink(p, force = TRUE), silent = TRUE)
+      # Shiny stages each upload in its own temp subdirectory; remove it
+      # too so not even the file NAME survives.
+      try(unlink(dirname(p), recursive = TRUE, force = TRUE),
+          silent = TRUE)
+    }
+    OUTPUT <<- NULL
+    DATA <<- NULL
+  })
 
   # FIX: removed stopImplicitCluster() and the commented-out doParallel
   # cluster setup. The row loop in P_Calc runs sequentially (%do%), so no
@@ -144,7 +168,52 @@ app_server <- function(input, output, session) {
     if (is.null(reactiveData())) return(NULL)
     tagList(
       actionButton("applyEdits", "Apply Edits & Revalidate"),
+      actionButton("addRows", "Add 5 Rows"),
+      div(style = "display: inline-block; vertical-align: top;",
+          textInput("newColName", NULL, placeholder = "new column name",
+                    width = "180px")),
+      actionButton("addCol", "Add Column"),
       HTML("<br><br>"))
+  })
+
+  # Explicit structural controls (Steve, 2026-08-17: the right-click menu
+  # proved undiscoverable/unreliable in deployment, and it can never NAME
+  # a new column - and column names are the data model). Both controls
+  # preserve any edits currently sitting in the grid (hot_to_r on the live
+  # widget), and skip the validation pass: adding empty structure is not
+  # a data change worth a fresh error log.
+  currentGrid <- function() {
+    if (!is.null(input$dataGrid)) {
+      if (is.data.frame(input$dataGrid)) input$dataGrid
+      else rhandsontable::hot_to_r(input$dataGrid)
+    } else reactiveData()
+  }
+
+  observeEvent(input$addRows, {
+    d <- currentGrid()
+    if (is.null(d)) return()
+    blank <- d[0, ]
+    blank[1:5, ] <- NA
+    skipValidation <<- TRUE
+    reactiveData(rbind(d, blank))
+  })
+
+  observeEvent(input$addCol, {
+    d <- currentGrid()
+    if (is.null(d)) return()
+    nm <- trimws(input$newColName)
+    if (!nzchar(nm)) {
+      outputComments("Type a name for the new column first.")
+      return()
+    }
+    if (toupper(nm) %in% toupper(names(d))) {
+      outputComments(paste0("A column named ", nm, " already exists."))
+      return()
+    }
+    d[[nm]] <- NA_real_   # numeric: new columns are category counts
+    skipValidation <<- TRUE
+    reactiveData(d)
+    updateTextInput(session, "newColName", value = "")
   })
 
   observeEvent(input$applyEdits, {
@@ -315,6 +384,8 @@ app_server <- function(input, output, session) {
       # confidential, verdicts must be reproducible). A failed parse is
       # reported per file and the rest continue.
       files <- input$upload
+      # record for the purge-on-exit guarantee (see session$onSessionEnded)
+      uploadedPaths <<- unique(c(uploadedPaths, files$datapath))
       files$ext <- tolower(tools::file_ext(files$name))
       files$stem <- tools::file_path_sans_ext(files$name)
 
