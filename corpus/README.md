@@ -65,9 +65,9 @@ uploaded to the app:
 | File | Challenge | Expected in the app |
 |---|---|---|
 | `Test1_clean_…` | fully parseable, 2 arms with N, 10 continuous rows | parses, validates, **Analyze runs** (p ≈ 0.78) |
-| `Test2_missingN_…` | table parsed but **no arm carries an N** (5 arms, 20 continuous rows) | parses; validation flags every row's missing N; fix via grid or extracted-table download |
+| `Test2_missingN_…` | table parsed but **no arm carries an N** (5 arms, 20 continuous rows) | parses; every row's N cell paints yellow (missing); fix via grid or extracted-table download |
 | `Test3_categorical_…` | parses with **no continuous rows** — categories only | parses; chi-square-only analysis path |
-| `Test4_skippedlines_…` | 29 of its table lines are **skipped as unusable** | parses; the log lists every skipped line and why |
+| `Test4_skippedlines_…` | 29 of its table lines are **skipped as unusable** | parses; each skipped line becomes a grid row with a red ROW cell (hover for the parser's reason), excluded from analysis until filled in or deleted |
 | `Test5_scanned_…` | **scanned image, no text layer** | fast clean failure: "scanned image" message, Template guidance |
 | `Test6_hang_…` | **poppler does not finish** — the parser subprocess hits its timeout | ~60 s wait, then clean failure; the app must stay responsive |
 | `PMID_12693995.pdf` | text layer present but **table-page identification declines** | fast clean failure; prime optimization-loop material |

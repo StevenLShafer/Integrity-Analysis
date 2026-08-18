@@ -133,6 +133,10 @@ app_ui <- function(testNote = NULL)
           # Edits & Revalidate" button below the grid; for a parsed PDF
           # this is where a missing arm N gets filled in directly.
           rhandsontable::rHandsontableOutput("dataGrid"),
+          # Issue 13 (2026-08-18): color legend for problem cells, shown
+          # only when validation flagged something - yellow = missing,
+          # red = unreadable, blue = incongruent.
+          uiOutput("issueLegend"),
           uiOutput("validateButton"),
           uiOutput("GoButton"),
           # Appears after a PDF parse: the extracted table as a spreadsheet,
