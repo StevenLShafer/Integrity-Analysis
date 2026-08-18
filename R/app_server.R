@@ -607,7 +607,9 @@ app_server <- function(input, output, session) {
       x <- OUTPUT
       # One-sided toward homogeneity (issue 6): a single P column. Small
       # P = baseline data more homogeneous than random sampling explains.
-      names(x) <- c("TRIAL", "ROW", "P (one-sided toward homogeneity)")
+      names(x) <- c("TRIAL", "ROW", "P (one-sided toward homogeneity)",
+                    "95% Monte Carlo bound",
+                    "Replicates")
       write.xlsx(x, file)
     })
 

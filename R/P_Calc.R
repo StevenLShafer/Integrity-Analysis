@@ -1,48 +1,108 @@
 # P_Calc.R — the Monte Carlo analysis of one trial.
 #
 # PROVENANCE: moved out of app_server() in phase 2 of the package
-# restructure (Claude Code, model Claude Fable 5, 2026-08-16). One
-# deliberate change, verified bit-identical under fixed seeds (see the
-# phase-2 PR): the function no longer reads DATA, CategoryNames and m from
-# the enclosing server environment - they are explicit arguments, so the
-# function can be called (and tested) without a running Shiny session.
-# Every FIX comment from the 2026-08-14 bug-fix pass travels with its code.
+# restructure (Claude Code, model Claude Fable 5, 2026-08-16); the function
+# takes DATA, CategoryNames and m as explicit arguments so it can be called
+# (and tested) without a running Shiny session. Every FIX comment from the
+# 2026-08-14 bug-fix pass travels with its code. 2026-08-17: one-sided
+# toward homogeneity (issue 6), median/IQR metalog branch (issue 12),
+# degenerate-category refusal, and the ADAPTIVE STAGED scheme below
+# (Steve's decision after the replicate-count discussion; independently
+# convergent with a Gemini analysis he commissioned).
+#
+# THE STAGED SCHEME, in brief (full user documentation: docs/statistics.md):
+#   - Each row simulates in stages: 1,000 -> 10,000 -> mMax (100,000)
+#     replicates, advancing only while the running mid-p is < 0.01. Clean
+#     rows stop at 1,000; only alarming rows pay for precision.
+#   - Point estimate: mid-p (ties count half - the Carlisle-validated
+#     convention), floored at 1/(m+1) (Davison & Hinkley: the Monte Carlo
+#     test is exact-valid; a simulated p of literally 0 is never reported).
+#   - Display: a row shows "<0.0001" ONLY when the one-sided 97.5%
+#     Clopper-Pearson upper bound on the exceedance count clears 0.0001 -
+#     the claim is licensed by the upper confidence limit, not the point
+#     estimate. Ties count FULLY toward the bound (conservative).
+#   - The trial p (Stouffer across rows) is closed-form arithmetic with no
+#     simulation noise of its own and is NOT floored - accumulation across
+#     rows is the fraud signal (Fujii). Its Monte Carlo uncertainty is
+#     propagated from the rows' binomial counts by parametric bootstrap
+#     and reported as a 95% interval whenever the trial p < 0.001.
+
+#' Staged tail simulation: escalate replicates only when the row alarms
+#'
+#' Runs `simulate(n)` (a closure returning n simulated statistics) in
+#' cumulative stages 1,000 / 10,000 / `mMax`, stopping early once the
+#' running mid-p is >= 0.01 - precision there is worthless. Returns the
+#' accumulated counts below (`kLess`) and tied with (`kEq`) `statObs`,
+#' and the replicates actually used (`m`).
+#' @noRd
+.stagedTail <- function(simulate, statObs, mMax) {
+  stages <- unique(pmin(c(1000, 10000, mMax), mMax))
+  kLess <- 0; kEq <- 0; mDone <- 0
+  for (s in stages) {
+    n <- s - mDone
+    if (n <= 0) next
+    sims <- simulate(n)
+    kLess <- kLess + sum(sims < statObs)
+    kEq   <- kEq   + sum(sims == statObs)
+    mDone <- s
+    if ((kLess + kEq / 2) / mDone >= 0.01) break
+  }
+  list(kLess = kLess, kEq = kEq, m = mDone)
+}
+
+#' One-sided 97.5% Clopper-Pearson upper bound on a Monte Carlo p
+#'
+#' `kLE` counts simulations at or below the observed statistic (ties
+#' fully - conservative for the bound). This is the number that licenses
+#' a "<0.0001" claim: the claim is made only when this bound clears it.
+#' @noRd
+.mcUpper <- function(kLE, m) stats::qbeta(0.975, kLE + 1, pmax(m - kLE, 0))
+
+#' Turn staged-tail counts into the row's report fields
+#'
+#' @return list: `p` (numeric mid-p, DH-floored), `disp` (display string:
+#'   "<0.0001" when licensed, else the number), `ci` (upper-bound string,
+#'   blank unless p < 0.001), `kLE`, `m`.
+#' @noRd
+.rowReport <- function(sc) {
+  midp <- (sc$kLess + sc$kEq / 2) / sc$m
+  p <- max(midp, 1 / (sc$m + 1))
+  if (p >= 1) p <- 0.9999
+  kLE <- sc$kLess + sc$kEq
+  upper <- .mcUpper(kLE, sc$m)
+  disp <- if (upper < 1e-4) "<0.0001" else as.character(signif(p, 4))
+  ci <- if (p < 0.001) paste0("<=", signif(upper, 2)) else ""
+  list(p = p, disp = disp, ci = ci, kLE = kLE, m = sc$m)
+}
 
 #' Monte Carlo integrity analysis of one trial's baseline table
 #'
 #' Reports a single **one-sided p-value toward excessive homogeneity**
-#' (issue 6, Steve's decision 2026-08-16, implemented 2026-08-17): P = the
-#' probability, under the null hypothesis of random sampling, of baseline
-#' data **at least as homogeneous** as observed. Small p = suspiciously
-#' homogeneous - the demonstrated fraud signal (Fujii). Excessive
-#' heterogeneity is deliberately NOT reported: it is not a known
-#' fabrication signal, and under the mid-p tie rule it is exactly
-#' 1 - P anyway, so the old second column carried no information.
+#' (issue 6): P = the probability, under the null hypothesis of random
+#' sampling, of baseline data **at least as homogeneous** as observed.
+#' Small p = suspiciously homogeneous - the demonstrated fraud signal
+#' (Fujii). Heterogeneity is deliberately not reported.
 #'
-#' Per row: continuous rows (all arms carry an N) simulate `m`
-#' replications of rounded per-arm means and take the lower mid-p tail of
-#' the between-arm sum of squares (unchanged from the Carlisle-validated
-#' implementation - issue 3, per-trial r = 0.995). Categorical rows
-#' simulate `m` contingency tables under fixed margins (`r2dtable`, the
-#' same null `chisq.test` uses) and take the lower mid-p tail of the
-#' chi-square statistic - counts more similar across arms than chance.
-#' NOTE this reverses the categorical direction: `chisq.test`'s p is the
-#' UPPER tail (small = arms differ more than chance), which pointed the
-#' wrong way for fraud detection and was directionally inconsistent with
-#' the continuous rows it was Stouffer-combined with. Median/IQR rows
-#' (Q1/Q3 filled in; MEAN read as the median) reconstruct the pooled
-#' population with a 3-term metalog matched to the pooled median and
-#' quartiles and take the lower mid-p tail of the between-arm scatter of
-#' rounded arm MEDIANS. Rows are combined across the trial with
-#' Stouffer's [sumz()].
+#' Per row: continuous rows (all arms carry an N) simulate rounded
+#' per-arm means under a common population (Carlisle-validated, issue 3);
+#' median/IQR rows (Q1/Q3 filled; MEAN read as the median) use a 3-term
+#' metalog matched to the pooled quartiles and compare rounded arm
+#' MEDIANS; categorical rows simulate contingency tables under fixed
+#' margins (`r2dtable`) and take the LOWER chi-square tail (counts more
+#' alike than chance). All rows use the staged replicate scheme and
+#' confidence-bounded reporting described at the top of this file, and
+#' combine across the trial with Stouffer's [sumz()] - unfloored, with a
+#' parametric-bootstrap 95% Monte Carlo interval when small.
 #'
 #' @param TRIAL the trial identifier (matched against `DATA$TRIAL`).
 #' @param DATA the validated data table (all trials; see [validateData()]).
 #' @param CategoryNames names of the category (count) columns, or `NULL`.
-#' @param m number of Monte Carlo replications.
-#' @return a data.frame with columns TRIAL, ROW, P: one row per data ROW,
-#'   then a "Summary" row with the Stouffer-combined p, then a blank
-#'   spacer row.
+#' @param m maximum replicates per row (the final stage; default global
+#'   is 100,000 - typical rows stop at 1,000).
+#' @return a data.frame with columns TRIAL, ROW, P, CI95, M: one row per
+#'   data ROW (M = replicates actually used; CI95 = upper bound, shown
+#'   when P < 0.001), then a "Summary" row with the combined p and its
+#'   bootstrap interval, then a blank spacer row.
 #' @noRd
 P_Calc <- function(TRIAL, DATA, CategoryNames, m)
 {
@@ -52,50 +112,36 @@ P_Calc <- function(TRIAL, DATA, CategoryNames, m)
   x <- foreach(
     j = 1:length(RowIDs),
     .combine = rbind
-    #  .options.future = list(seed = TRUE)
-    #.export = c("CategoryNames", "m"),
-    #.packages = c("Rfast", "dqrng")
   ) %do%
     {
       Row <- RowIDs[j]
       ROWS <- data[data$ROW == Row,]
+
+      Pdisp <- NA_character_; Pci <- ""; Pm <- NA_character_
+      Pnum <- NA_real_; PkLE <- NA_real_
 
       # Greater than 1 line?
       if (nrow(ROWS) > 1)
       {
         isQuartile <- "Q1" %in% names(ROWS) &&
                       (any(!is.na(ROWS$Q1)) || any(!is.na(ROWS$Q3)))
-        # Is this categorical?
         if (isQuartile && all(!is.na(ROWS$N)))
         {
-          # Median/IQR row (Steve's design decision 2026-08-17: quartiles
-          # present means MEAN holds the MEDIAN). The null hypothesis is
-          # the same as for means - all arms sampled from one common
-          # population - but the population is reconstructed from the
-          # pooled median and quartiles with a 3-term METALOG
-          # distribution (Keelin 2016): it matches the median, Q1, and
-          # Q3 EXACTLY including their asymmetry (papers report medians
-          # precisely because the data are skewed; a normal fitted as
-          # sigma = IQR/1.349 would throw the skew away), its quantile
-          # function is closed-form so sampling is one vectorized
-          # expression, and it reduces to a symmetric logistic when the
-          # quartiles are symmetric. Coefficients (NOTE: the a3 here is
-          # 2(Q1+Q3-2m)/ln3; a shared Gemini analysis of this problem
-          # printed 4(...)/ln3, a factor-of-2 slip against its own
-          # derivation - the unit test pins exact quantile recovery):
+          # Median/IQR row (issue 12): the common population is a 3-term
+          # METALOG matched to the pooled median and quartiles (Keelin
+          # 2016) - exact including asymmetry, closed-form sampling,
+          # logistic in the symmetric case. Coefficients (NOTE: a shared
+          # Gemini analysis printed a3 = 4(...)/ln3, a factor-of-2 slip
+          # against its own derivation; exact quantile recovery is pinned
+          # by a unit test):
           #   a1 = m,  a2 = IQR/(2 ln 3),  a3 = 2(Q1 + Q3 - 2m)/ln 3
-          #   X(u) = a1 + a2*logit(u) + a3*(u - 0.5)*logit(u)
-          # Feasibility requires |a3/a2| <= 1.667 (Keelin); beyond that
-          # the quantile function is non-monotone and the row is refused
-          # rather than mis-simulated.
+          # |a3/a2| > 1.667 (Keelin validity) refuses the row.
           if (any(is.na(ROWS$Q1)) || any(is.na(ROWS$Q3)))
           {
-            P <- "Mixed SD and quartile lines"
+            Pdisp <- "Mixed SD and quartile lines"
           } else {
           COLS <- nrow(ROWS)
           N <- sum(ROWS$N)
-          # pooled (N-weighted) median and quartiles define the common
-          # population, parallel to the pooled mean/SD in the mean branch
           medPool <- sum(ROWS$N * ROWS$MEAN) / N
           q1Pool  <- sum(ROWS$N * ROWS$Q1) / N
           q3Pool  <- sum(ROWS$N * ROWS$Q3) / N
@@ -104,41 +150,41 @@ P_Calc <- function(TRIAL, DATA, CategoryNames, m)
           a3 <- 2 * (q1Pool + q3Pool - 2 * medPool) / log(3)
           if (a2 <= 0 || abs(a3) / a2 > 1.667)
           {
-            P <- "Quartiles too skewed to simulate"
+            Pdisp <- "Quartiles too skewed to simulate"
           } else {
-          if ((m*N) < 1000000000)
-          {
-            m1 <- m
-          } else {
-            m1 <- floor(1000000000 / N)
-          }
-          # Per-replication uncertainty in the common location, parallel
-          # to SEMsample in the mean branch. Asymptotic SD of a sample
-          # median is 1/(2 f(m) sqrt(n)); the metalog density at its
-          # median is 1/(4 a2), so SD_median = 2 a2 / sqrt(n).
-          shiftsim <- dqrnorm(m1, mean = 0,
-                              sd = 2 * a2 / sqrt(mean(ROWS$N)))
-          MonteCarloMed <- matrix(NA, nrow = m1, ncol = COLS)
-          for (i in 1:COLS)
-          {
-            U <- matrix(dqrunif(ROWS$N[i] * m1), nrow = m1)
-            L <- log(U / (1 - U))
-            X <- (a1 + shiftsim) + a2 * L + a3 * (U - 0.5) * L
-            MonteCarloMed[,i] <-
-              round(
-                Rfast::rowMedians(
-                  round(X, ROWS$ROUND_OBSERVATION[i])),
-                ROWS$ROUND_MEAN[i])
-          }
-          Nmat <- matrix(ROWS$N, nrow = m1, ncol = COLS, byrow = TRUE)
-          MedCenter   <- rowsums(MonteCarloMed * Nmat) / N
-          DiffSamples <- rowsums((MonteCarloMed - MedCenter)^2)
           center     <- sum(ROWS$N * ROWS$MEAN) / N
           DiffSample <- sum((ROWS$MEAN - center)^2)
-          PEQ <- sum(DiffSamples == DiffSample) / m1
-          # lower mid-p tail toward homogeneity, same convention as the
-          # mean branch
-          P <- sum(DiffSamples < DiffSample)/m1 + PEQ/2
+          # Per-replication uncertainty in the common location: asymptotic
+          # SD of a sample median is 1/(2 f(m) sqrt(n)); metalog density
+          # at its median is 1/(4 a2), so SD_median = 2 a2 / sqrt(n).
+          sdShift <- 2 * a2 / sqrt(mean(ROWS$N))
+          simulate <- function(n) {
+            out <- numeric(0); left <- n
+            while (left > 0) {
+              # chunk so chunk*N stays bounded (memory guard, successor
+              # of the old fixed m1 <- 1e9/N cap)
+              ch <- min(left, max(1, floor(1e8 / max(1, N))))
+              shiftsim <- dqrnorm(ch, mean = 0, sd = sdShift)
+              MCMed <- matrix(NA_real_, ch, COLS)
+              for (i in 1:COLS)
+              {
+                U <- matrix(dqrunif(ROWS$N[i] * ch), nrow = ch)
+                L <- log(U / (1 - U))
+                X <- (a1 + shiftsim) + a2 * L + a3 * (U - 0.5) * L
+                MCMed[,i] <- round(
+                  Rfast::rowMedians(round(X, ROWS$ROUND_OBSERVATION[i])),
+                  ROWS$ROUND_MEAN[i])
+              }
+              Nmat <- matrix(ROWS$N, ch, COLS, byrow = TRUE)
+              MedC <- rowsums(MCMed * Nmat) / N
+              out <- c(out, rowsums((MCMed - MedC)^2))
+              left <- left - ch
+            }
+            out
+          }
+          rep <- .rowReport(.stagedTail(simulate, DiffSample, m))
+          Pdisp <- rep$disp; Pci <- rep$ci; Pm <- as.character(rep$m)
+          Pnum <- rep$p; PkLE <- rep$kLE
           }
           }
         }
@@ -159,74 +205,40 @@ P_Calc <- function(TRIAL, DATA, CategoryNames, m)
           } else {
             Meansd <- sqrt(Meanvar)
           }
-          # Protect size of simulation
-          if ((m*N) < 1000000000) # One billion
-          {
-            m1 <- m
-          } else {
-            # FIX: floor() added. 1e9/N is rarely a whole number, and a
-            # fractional replication count silently mis-sizes the matrix
-            # dimensions below.
-            m1 <- floor(1000000000 / N)
-          }
           SEMsample <- Meansd/sqrt(mean(ROWS$N))
           DiffSample <- sum((ROWS$MEAN - Meanmean)^2) # Squared difference of column means
-          # Monte Carlo Simulation
-          # FIX: was dqrnorm(m, ...). meansim must have exactly m1 entries
-          # (one simulated "true" mean per replication row). When N was
-          # large enough that m1 < m, the extra entries misaligned the
-          # column-major matrix fill below, so within one replication the
-          # study arms were simulated from DIFFERENT true means - breaking
-          # the null hypothesis the simulation is supposed to represent.
-          meansim <- dqrnorm(m1,mean=Meanmean,sd=SEMsample) # Generate a new mean for each simulation
-          MonteCarloMean <- matrix(NA, nrow = m1, ncol = COLS) # I want one row for each simulation
-          # Need to do each column separately. Couldn't think of an efficient way to do this without
-          # a loop.
-          for (i in 1:COLS)
-            MonteCarloMean[,i] <-
-            round(
-              rowmeans(
-                round(
-                  # The matrix below will have one row for each replication (m rows),
-                  # and one column for each person (N[i] columns)
-                  # Cannot use dqrnorm because it won't support the array
-                  # of meansim needed for each replication
-                  matrix(
-                    rnorm(ROWS$N[i] * m1, rep(meansim, ROWS$N[i]), Meansd),
-                    nrow = m1, byrow = FALSE
-                  ),
-                  ROWS$ROUND_OBSERVATION[i]  # observations rounded as recorded
-                )
-              ),
-              # FIX: was ROWS$ROUND_OBSERVATION[i]. The simulated column
-              # means must be rounded to the precision at which the
-              # PUBLISHED means were reported (ROUND_MEAN) - that is the
-              # value the validation code in the upload observer goes to
-              # such lengths to derive, and it was never used. Using the
-              # observation precision simulated the Monte Carlo
-              # distribution at the wrong granularity whenever means are
-              # reported more (or less) precisely than the observations.
-              ROWS$ROUND_MEAN[i]
-            )
-          N <- matrix(ROWS$N, nrow = m1, ncol = COLS, byrow = TRUE)
-          # Calculate the weighted mean, and then round
-          MeanSamples <- rowsums (MonteCarloMean * N) / sum(ROWS$N)
-          DiffSamples <- rowsums((MonteCarloMean - MeanSamples)^2)
-
-          PEQ <- sum(DiffSamples == DiffSample) / m1
-          # Mid-p convention (Steve's decision, 2026-08-16): simulated ties
-          # count HALF, so P = P(<) + PEQ/2. Rounding makes DiffSamples
-          # discrete, so ties are common and the choice matters. Evidence
-          # for mid-p: the issue-3 pilot against Carlisle's stored 2017
-          # values - full-tie counting disagreed with median |diff| 0.076,
-          # always ours-higher (the tie-inflation signature); as mid-p,
-          # per-trial r = 0.995 with 93% within 0.05. Carlisle's published
-          # values are, in effect, mid-p, and mid-p is the standard
-          # recommendation for discrete test statistics.
-          # One-sided toward homogeneity (issue 6): this lower tail is the
-          # only direction reported. This line is bit-identical to the
-          # Carlisle-validated implementation.
-          P <- sum(DiffSamples < DiffSample)/m1 + PEQ/2
+          # Monte Carlo Simulation. The simulation body is unchanged from
+          # the Carlisle-validated implementation (issue 3, r = 0.991);
+          # the staging wrapper only decides HOW MANY replications run.
+          # FIX (2026-08-14, carried): meansim must have exactly as many
+          # entries as replication rows, or the column-major fill would
+          # misalign arms within a replication; simulated column means
+          # round to ROUND_MEAN (the printed precision), observations to
+          # ROUND_OBSERVATION.
+          simulate <- function(n) {
+            out <- numeric(0); left <- n
+            while (left > 0) {
+              ch <- min(left, max(1, floor(1e8 / max(1, N))))
+              meansim <- dqrnorm(ch, mean = Meanmean, sd = SEMsample)
+              MCMean <- matrix(NA_real_, ch, COLS)
+              for (i in 1:COLS)
+                MCMean[,i] <- round(
+                  rowmeans(round(
+                    matrix(rnorm(ROWS$N[i] * ch,
+                                 rep(meansim, ROWS$N[i]), Meansd),
+                           nrow = ch, byrow = FALSE),
+                    ROWS$ROUND_OBSERVATION[i])),
+                  ROWS$ROUND_MEAN[i])
+              Nmat <- matrix(ROWS$N, ch, COLS, byrow = TRUE)
+              MS <- rowsums(MCMean * Nmat) / N
+              out <- c(out, rowsums((MCMean - MS)^2))
+              left <- left - ch
+            }
+            out
+          }
+          rep <- .rowReport(.stagedTail(simulate, DiffSample, m))
+          Pdisp <- rep$disp; Pci <- rep$ci; Pm <- as.character(rep$m)
+          Pnum <- rep$p; PkLE <- rep$kLE
         } else {
           # FIX: drop = FALSE added. With a single category column,
           # ROWS[,CategoryNames] dropped to a bare vector and the
@@ -238,73 +250,42 @@ P_Calc <- function(TRIAL, DATA, CategoryNames, m)
             if (all(is.na(ROWS[,NAME])))
               ROWS[,NAME] <- NULL
           }
-        # One-sided toward homogeneity (issue 6, 2026-08-17): this
-        # REVERSES the categorical direction. The previous code reported
-        # chisq.test's simulated p, which is the UPPER tail - small when
-        # the arms differ MORE than chance. For fraud detection the
-        # alarming direction is the opposite one: fabricated categorical
-        # baselines tend to be TOO SIMILAR across arms (a too-small
-        # chi-square). So simulate the same null chisq.test uses -
-        # contingency tables with the observed margins, via r2dtable -
-        # and take the LOWER mid-p tail of the chi-square statistic,
-        # exactly parallel to the continuous branch. (chisq.test itself
-        # only offers the upper tail, and hides its tie counts, which is
-        # why this simulates directly rather than transforming its p.)
-        # Expected cells use the classical formula; ties are exact
-        # because every statistic comes from the same integer margins.
+          # One-sided toward homogeneity (issue 6): the LOWER mid-p tail
+          # of the chi-square statistic under fixed margins (r2dtable,
+          # chisq.test's own null) - counts more alike than chance.
           tab <- as.matrix(ROWS)
-          # FIX (2026-08-17, found by the corpus/TEST mass run): degenerate
-          # tables crashed the whole analysis. A category cell can be NA
-          # (one arm's line carries a category the other arm's does not),
-          # and a category column can sum to zero; either way the expected
-          # counts contain zeros, the chi-square statistic is NaN, and
-          # if (P == 1) on NaN is a fatal error. Refuse such rows with a
-          # message instead - consistent with the app's refuse-rather-
-          # than-guess rule - after dropping zero-margin columns, which
-          # carry no information.
+          # FIX (2026-08-17, found by the corpus/TEST mass run):
+          # degenerate tables (NA cells, zero-margin columns) made the
+          # statistic NaN and crashed the analysis; refuse instead.
           if (any(is.na(tab)))
           {
-            P <- "Incomplete category counts across arms"
+            Pdisp <- "Incomplete category counts across arms"
           } else {
           tab <- tab[, colSums(tab) > 0, drop = FALSE]
           if (ncol(tab) < 2 || any(rowSums(tab) == 0))
           {
-            P <- "Degenerate category table (an arm or every remaining category is empty)"
+            Pdisp <- "Degenerate category table (an arm or every remaining category is empty)"
           } else {
           E <- outer(rowSums(tab), colSums(tab)) / sum(tab)
           statObs <- sum((tab - E)^2 / E)
-          statSim <- vapply(
-            r2dtable(m, rowSums(tab), colSums(tab)),
-            function(s) sum((s - E)^2 / E), numeric(1))
-          PEQ <- sum(statSim == statObs) / m
-          P <- sum(statSim < statObs)/m + PEQ/2
+          simulate <- function(n)
+            vapply(r2dtable(n, rowSums(tab), colSums(tab)),
+                   function(s) sum((s - E)^2 / E), numeric(1))
+          rep <- .rowReport(.stagedTail(simulate, statObs, m))
+          Pdisp <- rep$disp; Pci <- rep$ci; Pm <- as.character(rep$m)
+          Pnum <- rep$p; PkLE <- rep$kLE
           }
           }
-        }
-        # Need to be sure P != 0 or 1. (Guarded: the median/IQR branch can
-        # refuse a row with a message string instead of a number.)
-        if (is.numeric(P))
-        {
-          if(P == 1) P <- 0.999
-          if(P == 0) P <- 0.001
-          P = as.character(signif(P,4))
         }
       } else {
-        P = "Only 1 Row"
+        Pdisp <- "Only 1 Row"
       }
 
-      c(as.character(Row), P)
+      c(as.character(Row), Pdisp, Pci, Pm,
+        as.character(Pnum), as.character(PkLE))
     }
-  # FIX: removed "%seed% TRUE" after the closing brace. %seed% is
-  # doFuture's operator for seeding a %dofuture% loop; chained after %do%
-  # it was applied to the already-computed result matrix, which is an
-  # error. (Note dqrnorm draws from dqrng's own RNG stream; use
-  # dqset.seed() if reproducible simulations are ever needed.)
-
-  # This bizarre code is because if there is only 1 row, R creates a data.frame
-  # with 2 columns and 1 row. (Was length 3 before issue 6 dropped the
-  # heterogeneity column.)
-  if (length(x) == 2)
+  # Single-row trials come back as a bare vector (now length 6).
+  if (length(x) == 6)
   {
     x <- as.data.frame(t(x))
   } else {
@@ -314,40 +295,64 @@ P_Calc <- function(TRIAL, DATA, CategoryNames, m)
   x <- cbind(NA, x)
   x[1,1] <- TRIAL
   x <- as.data.frame(x)
-  names(x) <- c("TRIAL", "ROW", "P")
-  # FIX: was x[match(x$ROW, RowIDs),] - the arguments were reversed, which
-  # applies the INVERSE permutation. Harmless today only because %do%
-  # returns results already in RowIDs order; it would silently scramble row
-  # labels against p-values the day this loop is parallelized. To order x
-  # by RowIDs: for each RowID, find its position in x$ROW.
-  # (Also removed the leftover cat()/print() debugging output here.)
+  names(x) <- c("TRIAL", "ROW", "P", "CI95", "M", ".PNUM", ".KLE")
+  # FIX (carried): order x by RowIDs - for each RowID, find its position
+  # in x$ROW; the reversed match() applied the inverse permutation.
   x <- x[match(RowIDs, x$ROW),]
 
-  Pvalues <- as.numeric(x$P)
-  Pvalues <- Pvalues[!is.na(Pvalues)]
+  Pv   <- suppressWarnings(as.numeric(x$.PNUM))
+  kLEv <- suppressWarnings(as.numeric(x$.KLE))
+  Mv   <- suppressWarnings(as.numeric(x$M))
+  use  <- !is.na(Pv)
 
-  if (length(Pvalues) > 1)
+  ciStr <- ""
+  if (sum(use) > 1)
   {
-    P <- signif(sumz(Pvalues)$p,4)
+    # Stouffer across rows: closed-form arithmetic on the row p-values -
+    # NO simulation noise is added here, and the result is deliberately
+    # NOT floored: accumulation across rows is the fraud signal (eight
+    # innocuous rows at p = 0.01 legitimately combine to ~5e-9). The
+    # Monte Carlo uncertainty that DOES exist - each row's binomial
+    # count - is propagated by parametric bootstrap and reported as a
+    # 95% interval whenever the combined p is small enough to matter.
+    P <- signif(sumz(Pv[use])$p, 4)
+    if (P < 0.001)
+    {
+      boots <- replicate(1000, {
+        pStar <- (stats::rbinom(sum(use), Mv[use], Pv[use]) + 0.5) /
+                 (Mv[use] + 1)
+        sumz(pStar)$p
+      })
+      ciStr <- paste0(signif(stats::quantile(boots, 0.025, names = FALSE), 2),
+                      " to ",
+                      signif(stats::quantile(boots, 0.975, names = FALSE), 2))
+    }
   } else {
-    # FIX: was length(Pvalues == 1), i.e. the length of a comparison
-    # vector, not a comparison of the length. It worked by coincidence
-    # (length 1 -> 1 -> truthy; length 0 -> 0 -> falsy) but was a trap.
-    if (length(Pvalues) == 1)
-      P <- Pvalues
-    if (length(Pvalues)==0)
+    # FIX (carried): length(Pv[use]) == 1 vs the old length(x == 1) trap
+    if (sum(use) == 1)
+      P <- Pv[use]
+    if (sum(use) == 0)
       P = "No values"
   }
 
   lastline <- data.frame(
     TRIAL = c(NA, NA),
     ROW = c("Summary", NA),
-    P = c(as.character(P), NA)
+    P = c(as.character(P), NA),
+    CI95 = c(ciStr, NA),
+    M = c(NA, NA),
+    .PNUM = c(NA, NA),
+    .KLE = c(NA, NA)
   )
 
   x <- rbind(x, lastline)
+  # internal bookkeeping columns stay out of the results
+  x <- x[, c("TRIAL", "ROW", "P", "CI95", "M")]
   outputComments(
-    paste0("Trial ", TRIAL,": p = ", P, "\n")
+    paste0("Trial ", TRIAL,": p = ", P,
+           if (nzchar(ciStr)) paste0(" (95% Monte Carlo interval ",
+                                     ciStr, ")")
+           else "", "\n")
   )
   return(x)
 }
