@@ -190,6 +190,23 @@ validateData <- function(DATA) {
   }
   ColumnNames <- names(DATA)
 
+  # FIX (Steve's PR-22 testing, 2026-08-19): the rounding columns can
+  # EXIST but hold NA - the blank-table starter ships them empty, and a
+  # spreadsheet may leave them blank. The per-line decimal bump below
+  # does `if (DATA$ROUND_MEAN[i] < digits)`, and if (NA) is a fatal
+  # error: typing a decimal mean (45.3) into the blank table crashed
+  # the whole session. An empty rounding cell means "infer it", and the
+  # documented inference is exactly what the bump does when it starts
+  # from 0 - so fill NAs with 0 and let the bump raise them to the
+  # typed precision. (Coerce first: a text cell in a hand-edited
+  # rounding column must not crash either.)
+  for (col in c("ROUND_MEAN", "ROUND_OBSERVATION"))
+  {
+    if (!is.numeric(DATA[[col]]))
+      DATA[[col]] <- suppressWarnings(as.numeric(DATA[[col]]))
+    DATA[[col]][is.na(DATA[[col]])] <- 0
+  }
+
   # Validate Categories
   #
   # SE and ROUND_DISPERSION are recognised columns, not categories. Papers
