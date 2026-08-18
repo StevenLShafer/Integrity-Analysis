@@ -8,10 +8,15 @@
 # (app_run.R). History for the earlier cleanup passes (2026-08-14) is in
 # git; the FIX rationale comments travel with the code they explain.
 
-# m is the replication number for the Monte Carlo simulation.
-# (100000 gives smoother tails but is ~7x slower; 15000 is the value the
-# deployed app has been running with.)
-m <- 15000
+# m is the MAXIMUM replication count per row for the Monte Carlo
+# simulation (the final stage of the adaptive scheme - see the header of
+# R/P_Calc.R and docs/statistics.md). Rows simulate in stages
+# 1,000 -> 10,000 -> m, escalating only while the running mid-p is
+# < 0.01, so a typical (unalarming) row costs 1,000 replicates - CHEAPER
+# than the old flat 15,000 - while alarming rows get the precision that
+# makes a "<0.0001" claim defensible (the 97.5% upper confidence bound
+# must clear it, which needs ~30,000+ replicates at zero exceedances).
+m <- 100000
 
 ############################################################################
 # References                                                               #
