@@ -22,58 +22,7 @@ vertical-align: middle;
 }
 .display.math{display: block; text-align: center; margin: 0.5rem auto;}
 </style>
-  <style type="text/css">
-body {
-font-family: -apple-system, "Segoe UI", Roboto, Helvetica, Arial,
-sans-serif;
-line-height: 1.55;
-color: #222;
-max-width: 46em;
-margin: 0 auto;
-padding: 2em 1.5em 4em;
-}
-h1 {
-border-bottom: 2px solid #2c6e9e;
-padding-bottom: 0.2em;
-color: #1a4c70;
-margin-top: 2em;
-}
-header h1.title { border-bottom: none; margin-top: 0.5em; }
-h2 { color: #1a4c70; margin-top: 1.6em; }
-#TOC {
-background: #f4f8fb;
-border: 1px solid #d5e3ee;
-border-radius: 6px;
-padding: 0.8em 1.2em;
-margin: 1.5em 0;
-}
-#TOC ul { margin: 0.2em 0; padding-left: 1.2em; }
-table {
-border-collapse: collapse;
-margin: 1em 0;
-font-size: 0.95em;
-}
-th, td {
-border: 1px solid #c8d4dd;
-padding: 0.35em 0.7em;
-text-align: left;
-}
-th { background: #eef4f8; }
-code {
-background: #f2f2f2;
-padding: 0.1em 0.3em;
-border-radius: 3px;
-font-size: 0.92em;
-}
-a { color: #2c6e9e; }
-strong { color: #111; }
-blockquote {
-border-left: 4px solid #d5e3ee;
-margin-left: 0;
-padding-left: 1em;
-color: #444;
-}
-</style>
+  <style type="text/css">body {font-family: -apple-system, "Segoe UI", Roboto, Helvetica, Arial,sans-serif;line-height: 1.55;color: #222;max-width: 46em;margin: 0 auto;padding: 2em 1.5em 4em;}h1 {border-bottom: 2px solid #2c6e9e;padding-bottom: 0.2em;color: #1a4c70;margin-top: 2em;}header h1.title { border-bottom: none; margin-top: 0.5em; }h2 { color: #1a4c70; margin-top: 1.6em; }#TOC {background: #f4f8fb;border: 1px solid #d5e3ee;border-radius: 6px;padding: 0.8em 1.2em;margin: 1.5em 0;}#TOC ul { margin: 0.2em 0; padding-left: 1.2em; }table {border-collapse: collapse;margin: 1em 0;font-size: 0.95em;}th, td {border: 1px solid #c8d4dd;padding: 0.35em 0.7em;text-align: left;}th { background: #eef4f8; }code {background: #f2f2f2;padding: 0.1em 0.3em;border-radius: 3px;font-size: 0.92em;}a { color: #2c6e9e; }strong { color: #111; }blockquote {border-left: 4px solid #d5e3ee;margin-left: 0;padding-left: 1em;color: #444;}</style>
 </head>
 <body>
 <header id="title-block-header">
@@ -234,12 +183,15 @@ table lines the reader could not use appear as red-flagged rows in the
 grid (fill them in from the paper, or delete them), and a scanned image
 with no text layer fails cleanly with a message. Whatever was extracted
 can be reviewed, corrected, and analyzed without leaving the app.</p>
-<p><strong>Several files at once.</strong> Any mix of spreadsheets and
-PDFs in one selection. Every file becomes rows in one combined table,
-distinguished by the TRIAL column; a file without trial identifiers gets
-its file name as the trial. If two files use the same trial labels, the
-later file’s labels are prefixed with its file name so nothing silently
-merges.</p>
+<p><strong>Several files at once — or one after another.</strong> Any
+mix of spreadsheets and PDFs in one selection, and any number of uploads
+in sequence: <strong>each upload appends to the table already in the
+grid</strong> (including edits you have typed but not yet revalidated).
+Every file becomes rows in the combined table, distinguished by the
+TRIAL column; a file without trial identifiers gets its file name as the
+trial. If a new file uses trial labels already in the table, its labels
+are prefixed with its file name so nothing silently merges. To start
+over, click <strong>Start With an Empty Table</strong>.</p>
 <p><strong>An empty table.</strong> Click <strong>Start With an Empty
 Table</strong> and type the data straight into the grid — eight empty
 rows and placeholder category columns (CAT1–CAT3) to start. Add rows

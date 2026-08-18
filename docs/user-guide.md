@@ -125,11 +125,15 @@ in from the paper, or delete them), and a scanned image with no text
 layer fails cleanly with a message. Whatever was extracted can be
 reviewed, corrected, and analyzed without leaving the app.
 
-**Several files at once.** Any mix of spreadsheets and PDFs in one
-selection. Every file becomes rows in one combined table, distinguished
-by the TRIAL column; a file without trial identifiers gets its file name
-as the trial. If two files use the same trial labels, the later file's
-labels are prefixed with its file name so nothing silently merges.
+**Several files at once — or one after another.** Any mix of
+spreadsheets and PDFs in one selection, and any number of uploads in
+sequence: **each upload appends to the table already in the grid**
+(including edits you have typed but not yet revalidated). Every file
+becomes rows in the combined table, distinguished by the TRIAL column; a
+file without trial identifiers gets its file name as the trial. If a new
+file uses trial labels already in the table, its labels are prefixed
+with its file name so nothing silently merges. To start over, click
+**Start With an Empty Table**.
 
 **An empty table.** Click **Start With an Empty Table** and type the
 data straight into the grid — eight empty rows and placeholder category
