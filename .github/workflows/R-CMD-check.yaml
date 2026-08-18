@@ -48,4 +48,11 @@ jobs:
       - uses: r-lib/actions/check-r-package@v2
         with:
           args: 'c("--no-manual", "--as-cran")'
+          # Fail on ERRORs (which include any test failure) but tolerate
+          # the one known WARNING: run_app() attaches its packages with
+          # library(), the deliberate stanpumpR pattern documented in
+          # R/app_run.R ("qualifying every call with :: is phase 2+
+          # work, if ever"). If that refactor ever lands, tighten this
+          # to the default "warning".
+          error-on: '"error"'
           upload-snapshots: true
