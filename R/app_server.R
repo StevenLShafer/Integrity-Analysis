@@ -68,12 +68,26 @@ app_server <- function(input, output, session) {
   # confidential - this is a promise to the people uploading them, and
   # any future code path that touches an uploaded file must preserve it.
   session$onSessionEnded(function() {
+    # SAFETY GUARD (2026-08-19): only delete under tempdir(). A real
+    # client's uploads are ALWAYS staged there (each in its own
+    # subdirectory), so the guarantee is unchanged in production - but a
+    # test driving this server with a real file path must not have that
+    # file's parent DIRECTORY recursively deleted. (Learned the hard
+    # way: a testServer run that uploaded corpus PDFs by their real
+    # paths wiped the local corpus folder; it was rebuilt from sources.)
+    tmp <- normalizePath(tempdir(), winslash = "/", mustWork = FALSE)
     for (p in uploadedPaths) {
-      try(unlink(p, force = TRUE), silent = TRUE)
+      pn <- try(normalizePath(p, winslash = "/", mustWork = FALSE),
+                silent = TRUE)
+      if (inherits(pn, "try-error") ||
+          !startsWith(pn, paste0(tmp, "/"))) next
+      try(unlink(pn, force = TRUE), silent = TRUE)
       # Shiny stages each upload in its own temp subdirectory; remove it
-      # too so not even the file NAME survives.
-      try(unlink(dirname(p), recursive = TRUE, force = TRUE),
-          silent = TRUE)
+      # too so not even the file NAME survives - but never tempdir()
+      # itself (a file placed at the temp root keeps the root).
+      dp <- dirname(pn)
+      if (startsWith(dp, paste0(tmp, "/")))
+        try(unlink(dp, recursive = TRUE, force = TRUE), silent = TRUE)
     }
     OUTPUT <<- NULL
     DATA <<- NULL
