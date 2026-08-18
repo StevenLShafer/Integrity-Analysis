@@ -72,6 +72,42 @@ uploaded to the app:
 | `Test6_hang_…` | **poppler does not finish** — the parser subprocess hits its timeout | ~60 s wait, then clean failure; the app must stay responsive |
 | `PMID_12693995.pdf` | text layer present but **table-page identification declines** | fast clean failure; prime optimization-loop material |
 
+## The TEST corpus (corpus/TEST) and its selection rule
+
+61 PDFs (gitignored, copyrighted) used for mass end-to-end testing
+against the Carlisle ground truth (`buildTestSet.R` built it;
+`runMassTest.R` runs it; `compareResults.R` scores it on the log scale).
+
+**The selection rule is SUBSET verification, and this matters when
+reading comparisons:** a PDF qualified if it parsed fully (all arms with
+N, ≥ 3 continuous variables) and **every extracted (MEAN, SD) pair
+matched a Carlisle pair** — i.e., nothing extracted was *wrong*. It did
+NOT require that everything Carlisle hand-entered was extracted. As
+measured 2026-08-18: 47 of 61 parses recover exactly Carlisle's variable
+set; **14 of 61 recover fewer** (median 2 fewer, worst 6); none recover
+more. Trial-level p-value comparisons for those 14 therefore compare
+*different variable sets* — an input difference, not an engine
+difference (both adjudicated outliers below confirmed the engine matches
+Carlisle within Monte Carlo noise on identical input).
+
+## Optimization-loop specimens
+
+Catalogued parses worth studying when re-attacking the parser (add to
+this list as adjudications find more):
+
+- **PMID_12693995.pdf** (in this folder): text layer present, "Table 1
+  Participants' characteristics" printed on page 4, yet table-page
+  identification declines. The page-id heuristic's cleanest known miss.
+- **PMID_14984519.pdf** (in TEST/): the subtle one. The parse recovers
+  SEVEN variables — the same count as Carlisle — yet three of Carlisle's
+  value-pairs (his variables 3, 4, 6) are absent, so the parser's rows do
+  not map onto his (suspect an arm-column or row-merge artifact).
+  Consequence measured 2026-08-18: the missed variables carried the
+  homogeneity signal, diluting a genuine alarm from p = 0.014 to
+  p = 0.099 — incomplete parses can **under-detect**, which is why the
+  grid workflow and the planned issue-13 cell coloring must make gaps
+  conspicuous rather than silent.
+
 ## Ground rules for optimization passes
 
 1. **Deterministic first.** The deployed path must stay deterministic and
