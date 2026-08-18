@@ -58,6 +58,17 @@ app_ui <- function(testNote = NULL)
         "developed by John Carlisle and Steve Shafer."
         ),
       br(),
+      # The purge guarantee, stated where every user sees it before
+      # uploading a confidential manuscript (Steve's requirement,
+      # 2026-08-17; enforcement is in app_server's onSessionEnded).
+      h6(
+        strong("Privacy: "),
+        "nothing you upload or enter is retained. The uploaded PDF or",
+        "spreadsheet, any data typed into the table, and the analysis",
+        "results are all purged when this session closes. No record of",
+        "the analysis is kept."
+        ),
+      br(),
       HTML(
         '<p>
         <h6>Please direct questions and feedback to Steve Shafer at

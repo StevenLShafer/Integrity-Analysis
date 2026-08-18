@@ -54,6 +54,30 @@ app_server <- function(input, output, session) {
   skipValidation <- FALSE  # one-shot: the blank-table starter sets this so
                            # eight empty rows are not validated (and flagged
                            # line by line) before the user has typed anything
+  uploadedPaths <- character(0)  # every file this session uploaded, for
+                                 # the purge-on-exit guarantee below
+
+  # THE PURGE GUARANTEE (Steve's requirement, 2026-08-17): when the
+  # session ends, no record of the analysis survives. Uploaded files
+  # (manuscript PDFs and spreadsheets) are deleted from disk along with
+  # the per-upload temp directories Shiny created for them; the in-memory
+  # state (data, results, log) dies with the session environment. Nothing
+  # in this app writes analysis content anywhere else: downloads are
+  # generated straight into the response, outputComments() keeps no file
+  # log, and bookmarking is not enabled. Manuscripts under review are
+  # confidential - this is a promise to the people uploading them, and
+  # any future code path that touches an uploaded file must preserve it.
+  session$onSessionEnded(function() {
+    for (p in uploadedPaths) {
+      try(unlink(p, force = TRUE), silent = TRUE)
+      # Shiny stages each upload in its own temp subdirectory; remove it
+      # too so not even the file NAME survives.
+      try(unlink(dirname(p), recursive = TRUE, force = TRUE),
+          silent = TRUE)
+    }
+    OUTPUT <<- NULL
+    DATA <<- NULL
+  })
 
   # FIX: removed stopImplicitCluster() and the commented-out doParallel
   # cluster setup. The row loop in P_Calc runs sequentially (%do%), so no
@@ -360,6 +384,8 @@ app_server <- function(input, output, session) {
       # confidential, verdicts must be reproducible). A failed parse is
       # reported per file and the rest continue.
       files <- input$upload
+      # record for the purge-on-exit guarantee (see session$onSessionEnded)
+      uploadedPaths <<- unique(c(uploadedPaths, files$datapath))
       files$ext <- tolower(tools::file_ext(files$name))
       files$stem <- tools::file_path_sans_ext(files$name)
 
