@@ -899,6 +899,29 @@ app_server <- function(input, output, session) {
       write.xlsx(reactiveData(), file, keepNA = FALSE)
     })
 
+  # Journal-style reconstructed baseline table (issue 15, Steve
+  # 2026-08-17, implemented 2026-08-19): available whenever validation
+  # has succeeded (reactiveDataValidated is cleared by every upload /
+  # edit preamble, so the button hides itself when the table on screen
+  # is no longer the validated one). One xlsx sheet per trial; the
+  # reconstruction logic lives in R/baselineTable.R.
+  output$journalButton <- renderUI({
+    if (is.null(reactiveDataValidated())) return(NULL)
+    tagList(downloadButton("journalTable",
+                           "Download Baseline Table (journal view)"),
+            HTML("<br><br>"))
+  })
+  output$journalTable <- downloadHandler(
+    filename = function() {
+      paste0("Baseline Table.",
+             format(Sys.time(), format = "%y%m%d-%H%M%S"), ".xlsx")
+    },
+    content = function(file) {
+      writeBaselineTablesXlsx(
+        buildBaselineTables(reactiveDataValidated(), CategoryNames),
+        file)
+    })
+
   output$documentation <- downloadHandler(
     filename = function() {
       "IntegrityAnalysis.pdf"
