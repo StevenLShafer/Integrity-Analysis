@@ -24,7 +24,11 @@ validation pipeline + `P_Calc()` Monte Carlo — was `server.R`),
 `R/app_run.R` (exported `run_app()`, attaches libraries, registers
 `inst/www` under the `www/` resource prefix). `app.R` is a one-line shim.
 Bundled assets live in `inst/www`; `Template.xlsx`, `Example.xlsx`, and
-`IntegrityAnalysis.pdf` in `inst/extdata`, resolved with `system.file()`.
+`IntegrityAnalysis.html` in `inst/extdata`, resolved with `system.file()`.
+The user documentation's MASTER is `docs/user-guide.md` (issue 14) —
+edit the Markdown, then regenerate the served HTML with the pandoc
+command in its header comment; never edit `inst/extdata/IntegrityAnalysis.html`
+directly, and keep the two in sync in the same commit.
 No renv (deliberate — see the plan). Since the ParsePDF fold-in
 (2026-08-17, issue 9) the package also contains the PDF parser
 (`R/parseBaselineTable*.R`, `tokenize.R`, `pageLayout.R`, `aiFallback.R`,
