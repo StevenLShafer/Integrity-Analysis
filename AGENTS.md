@@ -124,6 +124,15 @@ parsing challenge: `corpus/` (see its README).
   ordinary commits directly — used for documentation-only changes; code
   goes through PRs. If a push is rejected, do not try to work around the
   protection; rebase onto the current `main` and push normally.
+- **`R-CMD-check` is a required status check on `main`** (2026-08-19,
+  phase 5): every PR must pass the GitHub Actions R CMD check — which
+  runs the full testthat suite on a bare Ubuntu runner — before it can
+  merge. The workflow is `.github/workflows/R-CMD-check.yaml`; it fails
+  on ERRORs and tolerates the one documented `library()` WARNING (see
+  the comment there). A PR whose check is red is not mergeable — fix
+  the tests, never bypass. The deploy trio (auto production deploy,
+  PR-app lifecycle) is still manual pending `SHINY_TOKEN`/`SHINY_SECRET`
+  repository secrets.
 - No Bioconductor-dependent packages (the shinyapps.io image build breaks
   on them — that is why `metap` was replaced by a local `sumz()`).
 - Keep secrets and per-user data out of `outputComments()` logs and out of
