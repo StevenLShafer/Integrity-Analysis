@@ -68,12 +68,26 @@ app_server <- function(input, output, session) {
   # confidential - this is a promise to the people uploading them, and
   # any future code path that touches an uploaded file must preserve it.
   session$onSessionEnded(function() {
+    # SAFETY GUARD (2026-08-19): only delete under tempdir(). A real
+    # client's uploads are ALWAYS staged there (each in its own
+    # subdirectory), so the guarantee is unchanged in production - but a
+    # test driving this server with a real file path must not have that
+    # file's parent DIRECTORY recursively deleted. (Learned the hard
+    # way: a testServer run that uploaded corpus PDFs by their real
+    # paths wiped the local corpus folder; it was rebuilt from sources.)
+    tmp <- normalizePath(tempdir(), winslash = "/", mustWork = FALSE)
     for (p in uploadedPaths) {
-      try(unlink(p, force = TRUE), silent = TRUE)
+      pn <- try(normalizePath(p, winslash = "/", mustWork = FALSE),
+                silent = TRUE)
+      if (inherits(pn, "try-error") ||
+          !startsWith(pn, paste0(tmp, "/"))) next
+      try(unlink(pn, force = TRUE), silent = TRUE)
       # Shiny stages each upload in its own temp subdirectory; remove it
-      # too so not even the file NAME survives.
-      try(unlink(dirname(p), recursive = TRUE, force = TRUE),
-          silent = TRUE)
+      # too so not even the file NAME survives - but never tempdir()
+      # itself (a file placed at the temp root keeps the root).
+      dp <- dirname(pn)
+      if (startsWith(dp, paste0(tmp, "/")))
+        try(unlink(dp, recursive = TRUE, force = TRUE), silent = TRUE)
     }
     OUTPUT <<- NULL
     DATA <<- NULL
@@ -123,11 +137,130 @@ app_server <- function(input, output, session) {
   # each validation pass writes line-by-line messages to the comments
   # log, and firing it on every cell edit would bury the user in output.
 
+  # Issue 13 (Steve's design): validation problems paint their CELLS -
+  # yellow = missing, red = unreadable, blue = incongruent - so review
+  # means looking at the table, not reading a log. rIssues holds the
+  # (row, col, code) map from the last validateData pass.
+  rIssues <- reactiveVal(NULL)
+
+  # Table lines the PDF parser saw but could not use (r$skipped) become
+  # GRID ROWS - label in ROW, everything else empty - so a parse loss is
+  # a conspicuous colored row to fill in or delete, never a silent gap
+  # (the PMID 14984519 lesson: missed variables diluted a real alarm).
+  # This registry holds (TRIAL, ROW, reason); the renderer matches it
+  # against the displayed frame by TRIAL + ROW (indices survive edits)
+  # and paints the ROW cell red with the parser's reason as the hover
+  # text. A row stops matching - and stops being red - the moment the
+  # user fills any data into it, which is exactly right.
+  parseSkips <- reactiveVal(NULL)
+
+  # The legend IS the error report (Steve's direction, 2026-08-19): no
+  # explanatory text prints below the table, so each color carries its
+  # explanation here, and every colored cell explains itself on hover.
+  output$issueLegend <- renderUI({
+    if (is.null(rIssues())) return(NULL)
+    entry <- function(color, label, text) div(
+      style = "margin: 2px 0;",
+      span(style = paste0("display:inline-block; width:14px; height:14px;",
+                          "background:", color, "; border:1px solid #999;",
+                          "vertical-align:middle; margin-right:6px;")),
+      tags$b(label), paste0(" - ", text))
+    div(style = "margin: 4px 0 8px 0; font-size: 13px;",
+        entry("#fff3b0", "missing", paste(
+          "a required value is empty. Enter it, or delete the row.",
+          "Rows with a label but no data at all are left out of the",
+          "analysis.")),
+        entry("#f4b6b6", "unreadable", paste(
+          "could not be read: text where a number belongs, or a table",
+          "line the PDF reader could not use. Hover the cell for the",
+          "reason.")),
+        entry("#b8d0f0", "incongruent", paste(
+          "the value conflicts with the row's type - for example an SD",
+          "on a median/IQR row, or continuous entries on a category",
+          "row.")),
+        div(style = "margin-top: 4px;", paste(
+          "Fix or delete the colored cells, then click Apply Edits &",
+          "Revalidate. Hover any colored cell for details.")))
+  })
+
   output$dataGrid <- rhandsontable::renderRHandsontable({
     d <- reactiveData()
     if (is.null(d)) return(NULL)
+    # cell-issue payload for the renderer: keys "row|col", 0-based.
+    # cellNotes carries per-cell hover text where a specific reason is
+    # known (the parser's skip reasons); the renderer falls back to a
+    # generic per-color explanation otherwise.
+    issPayload <- NULL
+    notePayload <- NULL
+    iss <- rIssues()
+    if (!is.null(iss)) {
+      ci <- match(iss$col, names(d))
+      ok <- !is.na(ci) & iss$row <= nrow(d)
+      if (any(ok)) {
+        issPayload <- as.list(iss$code[ok])
+        names(issPayload) <- paste0(iss$row[ok] - 1, "|", ci[ok] - 1)
+        # cell-specific hover text where validateData supplied one
+        # (e.g. the single-line-categorical explanation)
+        if ("note" %in% names(iss)) {
+          noted <- ok & !is.na(iss$note)
+          if (any(noted)) {
+            notePayload <- as.list(iss$note[noted])
+            names(notePayload) <- paste0(iss$row[noted] - 1, "|",
+                                         ci[noted] - 1)
+          }
+        }
+      }
+    }
+    sk <- parseSkips()
+    if (!is.null(sk) && nrow(sk) > 0 &&
+        all(c("TRIAL", "ROW") %in% names(d))) {
+      rowCol <- match("ROW", names(d))
+      dataCols <- intersect(c("N", "MEAN", "SD", "SE", "Q1", "Q3"),
+                            names(d))
+      for (s in seq_len(nrow(sk))) {
+        # match by TRIAL + ROW, but only rows still without data - once
+        # the user fills the line in, it is no longer an unread loss
+        hits <- which(as.character(d$TRIAL) == sk$TRIAL[s] &
+                      as.character(d$ROW) == sk$ROW[s])
+        hits <- hits[vapply(hits, function(r)
+          all(is.na(d[r, dataCols])), logical(1))]
+        for (r in hits) {
+          key <- paste0(r - 1, "|", rowCol - 1)
+          if (is.null(issPayload)) issPayload <- list()
+          if (is.null(notePayload)) notePayload <- list()
+          issPayload[[key]] <- "unreadable"
+          notePayload[[key]] <- paste0(
+            "The PDF reader saw this table line but could not use it: ",
+            sk$reason[s])
+        }
+      }
+    }
+    # Per-row display precision (Steve, 2026-08-19): which columns are
+    # "mean-like" (MEAN holds mean or median; Q1/Q3) vs "dispersion-like"
+    # (SD/SE), and where their rounding declarations live. All indices
+    # 0-based for the JS renderer.
+    # the displayed frame keeps the UPLOADED names (normalization happens
+    # inside validateData), so match loosely: case-insensitive, and the
+    # rounding columns under both their underscore and space spellings
+    un <- toupper(trimws(names(d)))
+    ri <- function(...) {
+      i <- match(c(...), un)
+      i <- i[!is.na(i)]
+      if (length(i) == 0) NULL else i[1] - 1
+    }
+    roles <- list()
+    for (nm in c("MEAN", "Q1", "Q3"))
+      if (!is.null(ri(nm))) roles[[as.character(ri(nm))]] <- "mean"
+    for (nm in c("SD", "SE"))
+      if (!is.null(ri(nm))) roles[[as.character(ri(nm))]] <- "disp"
+    roundFmt <- list(mean = ri("ROUND_MEAN", "ROUND MEAN"),
+                     disp = ri("ROUND_DISPERSION", "ROUND DISPERSION"),
+                     roles = roles)
     w <- rhandsontable::rhandsontable(
       d,
+      cellIssues = issPayload,
+      cellNotes = notePayload,
+      roundFmt = roundFmt,
       # cap the widget height; rhandsontable scrolls and virtualizes rows
       height = min(400, 60 + 24 * nrow(d)),
       rowHeaders = TRUE) |>
@@ -147,18 +280,79 @@ app_server <- function(input, output, session) {
     # integer-formatted even when their values happen to be whole,
     # because numbro's "0" format would DISPLAY a later-typed 63.5 as 64
     # while storing 63.5 - a lie on screen.
+    # Issue-13 painting renderer: delegate to the type-appropriate base
+    # renderer (numeric keeps its numericFormat pattern), then color the
+    # background if this cell is in the issue map. Applied per column so
+    # the format specs above stay effective; row/column highlight is
+    # class-based and unaffected.
+    paintJS <- paste0(
+      "function(instance, td, row, col, prop, value, cellProperties) {",
+      "  var base = cellProperties.type === 'numeric' ?",
+      "    Handsontable.renderers.NumericRenderer :",
+      "    Handsontable.renderers.TextRenderer;",
+      "  base.apply(this, arguments);",
+      # Display precision follows the row's declared rounding (Steve,
+      # 2026-08-19): MEAN/Q1/Q3 show ROUND_MEAN decimals; SD/SE show
+      # ROUND_DISPERSION's, falling back to ROUND_MEAN. A blank rounding
+      # cell leaves the value as typed (the underlying datum is never
+      # altered - this is display only, and editing a cell still opens
+      # the raw value).
+      "  var rf = instance.params ? instance.params.roundFmt : null;",
+      "  if (rf && rf.roles && value !== null && value !== '' &&",
+      "      isFinite(value)) {",
+      "    var role = rf.roles[col];",
+      "    if (role) {",
+      "      var digits = null;",
+      "      var grab = function(ci) {",
+      "        if (ci == null) return null;",
+      "        var v = instance.getDataAtCell(row, ci);",
+      "        return (v === null || v === '' || !isFinite(v)) ? null",
+      "                                                        : Number(v);",
+      "      };",
+      "      if (role === 'mean') digits = grab(rf.mean);",
+      "      else { digits = grab(rf.disp);",
+      "             if (digits === null) digits = grab(rf.mean); }",
+      "      if (digits !== null && digits >= 0 && digits <= 8)",
+      "        td.textContent = Number(value).toFixed(digits);",
+      "    }",
+      "  }",
+      "  var iss = instance.params ? instance.params.cellIssues : null;",
+      "  if (iss) {",
+      "    var key = row + '|' + col;",
+      "    var code = iss[key];",
+      "    var help = {",
+      "      missing: 'A required value is missing. Enter it, or delete ",
+                       "the row.',",
+      "      unreadable: 'This could not be read as a number.',",
+      "      incongruent: 'This value conflicts with the type of the ",
+                          "row.'};",
+      "    if (code === 'missing') td.style.background = '#fff3b0';",
+      "    else if (code === 'unreadable') td.style.background = '#f4b6b6';",
+      "    else if (code === 'incongruent') td.style.background = '#b8d0f0';",
+      "    if (code) {",
+      "      var notes = instance.params.cellNotes;",
+      "      td.title = (notes && notes[key]) ? notes[key] : help[code];",
+      "    }",
+      "  }",
+      "}")
     measureCols <- intersect(c("MEAN", "SD", "SE"), names(d))
     for (nm in names(d)) {
       v <- d[[nm]]
-      if (!is.numeric(v)) next
+      if (!is.numeric(v)) {
+        w <- rhandsontable::hot_col(w, nm, renderer = paintJS)
+        next
+      }
       if (nm %in% measureCols) {
-        w <- rhandsontable::hot_col(w, nm, format = "0.[00000]")
+        w <- rhandsontable::hot_col(w, nm, format = "0.[00000]",
+                                    renderer = paintJS)
       } else if (all(is.na(v) | v %% 1 == 0)) {
         # N, ROUND_MEAN, ROUND_DISPERSION, ROUND_OBSERVATION, category
         # counts - anything whole-numbered
-        w <- rhandsontable::hot_col(w, nm, format = "0")
+        w <- rhandsontable::hot_col(w, nm, format = "0",
+                                    renderer = paintJS)
       } else {
-        w <- rhandsontable::hot_col(w, nm, format = "0.[00000]")
+        w <- rhandsontable::hot_col(w, nm, format = "0.[00000]",
+                                    renderer = paintJS)
       }
     }
     w
@@ -248,6 +442,7 @@ app_server <- function(input, output, session) {
     output$downloadButton <- NULL
     reactiveDataValidated(NULL)
     output$GoButton <- NULL
+    rIssues(NULL)   # revalidation will re-derive the cell-issue colors
     reactiveData(edited)
   })
 
@@ -265,6 +460,8 @@ app_server <- function(input, output, session) {
     reactiveDataValidated(NULL)
     output$GoButton <- NULL
     output$downloadButton <- NULL
+    rIssues(NULL)   # fresh empty table - no issue colors yet
+    parseSkips(NULL)
     blank <- data.frame(
       TRIAL = rep(NA_character_, 8), ROW = NA_character_,
       N = NA_real_, MEAN = NA_real_, SD = NA_real_, SE = NA_real_,
@@ -361,6 +558,8 @@ app_server <- function(input, output, session) {
       reactiveDataValidated(NULL)
       output$GoButton <- NULL
       output$downloadButton <- NULL
+      rIssues(NULL)   # new upload - stale issue colors must not carry over
+      parseSkips(NULL)
 
       # Multi-file upload (Steve's request, 2026-08-17): any mix of
       # csv/xls/xlsx/PDF in one selection. Every file becomes a data
@@ -452,17 +651,25 @@ app_server <- function(input, output, session) {
             ": table page ", res$page[k], ", ", res$arms[k], " arm(s) (",
             res$armsWithN[k], " with N), ", res$variables[k],
             " variable(s), ", res$continuous[k], " with mean and SD."))
-          if (nrow(r$skipped) > 0) {
-            outputComments(paste0(
-              nrow(r$skipped), " table line(s) could not be used:"))
-            for (s in seq_len(nrow(r$skipped)))
-              outputComments(paste0("- ", r$skipped$label[s], ": ",
-                                    r$skipped$reason[s]))
-          }
           d <- r$data
           d$TRIAL <- files$stem[i]   # opaque temp name -> the user's name
+          # Table lines the parser could not use become GRID ROWS - the
+          # label in ROW, everything else empty - instead of log text
+          # (Steve's direction, 2026-08-19). Their ROW cells paint red
+          # with the parser's reason on hover (see parseSkips above),
+          # their required cells paint yellow, and validation leaves them
+          # out of the analysis until the user fills them in or deletes
+          # them.
+          if (nrow(r$skipped) > 0) {
+            extra <- d[rep(NA_integer_, nrow(r$skipped)), , drop = FALSE]
+            extra$TRIAL <- files$stem[i]
+            extra$ROW <- r$skipped$label
+            rownames(extra) <- NULL
+            d <- rbind(d, extra)
+          }
           frames[[length(frames) + 1]] <-
-            list(stem = files$stem[i], data = d)
+            list(stem = files$stem[i], data = d,
+                 skips = if (nrow(r$skipped) > 0) r$skipped else NULL)
         }
       }
 
@@ -508,6 +715,16 @@ app_server <- function(input, output, session) {
         outputComments(paste0("Combined ", length(frames), " file(s): ",
                               nrow(DATA), " rows, ",
                               length(unique(DATA$TRIAL)), " trial(s)."))
+      # Register the parser's skipped lines under each frame's FINAL
+      # trial value (disambiguation above may have prefixed it) so the
+      # grid renderer can find and paint their rows.
+      skipReg <- do.call(rbind, lapply(frames, function(f) {
+        if (is.null(f$skips)) return(NULL)
+        data.frame(TRIAL = as.character(f$data$TRIAL[1]),
+                   ROW = f$skips$label, reason = f$skips$reason,
+                   stringsAsFactors = FALSE)
+      }))
+      parseSkips(skipReg)
       reactiveData(DATA)
     }
   )
@@ -537,8 +754,20 @@ app_server <- function(input, output, session) {
       # outputComments() and returns the derived state; assignment to the
       # per-session variables stays here, where the session is.
       v <- validateData(DATA)
+      # Issue 13: publish the cell-issue map (colors) from this pass -
+      # including the soft warnings a successful pass can carry.
+      rIssues(if (!is.null(v$issues) && nrow(v$issues) > 0) v$issues
+              else NULL)
       if (v$FAIL)
       {
+        # Show the NORMALIZED frame the issues index into (validateData
+        # returns it pre-sort). skipValidation prevents this reactive
+        # write from re-triggering validation on the same data.
+        if (!is.null(v$DATA))
+        {
+          skipValidation <<- TRUE
+          reactiveData(v$DATA)
+        }
         return()
       }
 
