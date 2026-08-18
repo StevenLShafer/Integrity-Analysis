@@ -1,7 +1,10 @@
 # Working data that must never be committed:
 # - article PDFs are copyrighted (corpus PDFs live in C:/temp/journals)
 # - the Carlisle spreadsheets are working data, not repository content
+corpus/**/*.pdf
 corpus/*.pdf
+corpus/ExpectedResults.xlsx
+corpus/ActualResults.xlsx
 TestPapers/
 *Carlisle*.xlsx
 One Sheet*.xlsx
