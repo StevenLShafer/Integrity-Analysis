@@ -140,6 +140,11 @@ app_ui <- function(testNote = NULL)
           # the spreadsheet) rather than a dead end - the failure contract
           # from ISSUES.md issue 1.
           uiOutput("extractedButton"),
+          # Issue 15 (Steve, 2026-08-17): after validation succeeds, the
+          # journal-style reconstructed baseline table - variables as
+          # rows, arms as columns, cells as journals print them - the
+          # artifact an editor compares against the manuscript page.
+          uiOutput("journalButton"),
           uiOutput("logContent"),
           uiOutput("downloadButton")
         )
