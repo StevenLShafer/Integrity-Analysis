@@ -115,8 +115,11 @@ for (ck in cks) {
 wb <- createWorkbook()
 addWorksheet(wb, "Lines");  writeData(wb, "Lines",  do.call(rbind, lines))
 addWorksheet(wb, "Trials"); writeData(wb, "Trials", do.call(rbind, trials))
-outName <- if (mode == "continuous") "ActualResults_continuous.xlsx"
-           else "ActualResults.xlsx"
+outName <- if (mode == "continuous") {
+  "ActualResults_continuous.xlsx"
+} else {
+  "ActualResults.xlsx"
+}
 saveWorkbook(wb, file.path("C:/dev/IntegrityAnalysis", "corpus",
                            outName), overwrite = TRUE)
 cat("written corpus/", outName, " -",
