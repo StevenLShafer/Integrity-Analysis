@@ -18,6 +18,14 @@
 # Output: corpus/ActualResults.xlsx - per-line and per-trial one-sided P
 # for every TEST PDF, ready to compare against corpus/ExpectedResults.xlsx.
 
+# Guard against the wrong R: this machine's default Rscript is R 4.6,
+# whose library is nearly empty. The package lives in the R 4.5.3 user
+# library (AGENTS.md runbook). runMassTest.bat pins the right one.
+if (!requireNamespace("IntegrityAnalysis", quietly = TRUE))
+  stop("IntegrityAnalysis is not installed in THIS R (",
+       R.version.string, ").\nRun with R 4.5.3 instead:\n",
+       '  "C:\\Program Files\\R\\R-4.5.3\\bin\\Rscript.exe" ',
+       "corpus/runMassTest.R\nor double-click corpus\\runMassTest.bat")
 suppressWarnings(suppressPackageStartupMessages({
   library(IntegrityAnalysis); library(shiny)
   library(openxlsx); library(Rfast); library(foreach); library(MBESS)
