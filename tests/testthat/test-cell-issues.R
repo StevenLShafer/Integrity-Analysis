@@ -171,6 +171,31 @@ test_that("a parser-skipped table line becomes a painted grid row", {
   })
 })
 
+test_that("the widget carries the per-row display-precision map", {
+  # Steve (2026-08-19): displayed decimals must follow the row's
+  # declared rounding - MEAN/Q1/Q3 from ROUND_MEAN, SD/SE from
+  # ROUND_DISPERSION (fallback ROUND_MEAN). The renderer reads this
+  # roundFmt payload; here we pin the payload itself.
+  shiny::testServer(app_server, {
+    good <- data.frame(
+      TRIAL = "T", ROW = c("Age", "Age"), N = c(15, 17),
+      MEAN = c(45.3, 46.1), SD = c(12.1, 11.8), Q1 = NA_real_,
+      ROUND_MEAN = 1, ROUND_DISPERSION = 2, ROUND_OBSERVATION = 1,
+      stringsAsFactors = FALSE)
+    session$setInputs(dataGrid = good, applyEdits = 1)
+    w <- jsonlite::fromJSON(output$dataGrid)
+    rf <- w$x$roundFmt
+    expect_identical(rf$mean, match("ROUND_MEAN", names(good)) - 1L)
+    expect_identical(rf$disp, match("ROUND_DISPERSION", names(good)) - 1L)
+    expect_identical(rf$roles[[as.character(match("MEAN", names(good)) - 1L)]],
+                     "mean")
+    expect_identical(rf$roles[[as.character(match("SD", names(good)) - 1L)]],
+                     "disp")
+    expect_identical(rf$roles[[as.character(match("Q1", names(good)) - 1L)]],
+                     "mean")
+  })
+})
+
 test_that("the server paints on validation failure and clears on new input", {
   shiny::testServer(app_server, {
     bad <- data.frame(

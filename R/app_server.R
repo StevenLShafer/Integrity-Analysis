@@ -235,10 +235,32 @@ app_server <- function(input, output, session) {
         }
       }
     }
+    # Per-row display precision (Steve, 2026-08-19): which columns are
+    # "mean-like" (MEAN holds mean or median; Q1/Q3) vs "dispersion-like"
+    # (SD/SE), and where their rounding declarations live. All indices
+    # 0-based for the JS renderer.
+    # the displayed frame keeps the UPLOADED names (normalization happens
+    # inside validateData), so match loosely: case-insensitive, and the
+    # rounding columns under both their underscore and space spellings
+    un <- toupper(trimws(names(d)))
+    ri <- function(...) {
+      i <- match(c(...), un)
+      i <- i[!is.na(i)]
+      if (length(i) == 0) NULL else i[1] - 1
+    }
+    roles <- list()
+    for (nm in c("MEAN", "Q1", "Q3"))
+      if (!is.null(ri(nm))) roles[[as.character(ri(nm))]] <- "mean"
+    for (nm in c("SD", "SE"))
+      if (!is.null(ri(nm))) roles[[as.character(ri(nm))]] <- "disp"
+    roundFmt <- list(mean = ri("ROUND_MEAN", "ROUND MEAN"),
+                     disp = ri("ROUND_DISPERSION", "ROUND DISPERSION"),
+                     roles = roles)
     w <- rhandsontable::rhandsontable(
       d,
       cellIssues = issPayload,
       cellNotes = notePayload,
+      roundFmt = roundFmt,
       # cap the widget height; rhandsontable scrolls and virtualizes rows
       height = min(400, 60 + 24 * nrow(d)),
       rowHeaders = TRUE) |>
@@ -269,6 +291,31 @@ app_server <- function(input, output, session) {
       "    Handsontable.renderers.NumericRenderer :",
       "    Handsontable.renderers.TextRenderer;",
       "  base.apply(this, arguments);",
+      # Display precision follows the row's declared rounding (Steve,
+      # 2026-08-19): MEAN/Q1/Q3 show ROUND_MEAN decimals; SD/SE show
+      # ROUND_DISPERSION's, falling back to ROUND_MEAN. A blank rounding
+      # cell leaves the value as typed (the underlying datum is never
+      # altered - this is display only, and editing a cell still opens
+      # the raw value).
+      "  var rf = instance.params ? instance.params.roundFmt : null;",
+      "  if (rf && rf.roles && value !== null && value !== '' &&",
+      "      isFinite(value)) {",
+      "    var role = rf.roles[col];",
+      "    if (role) {",
+      "      var digits = null;",
+      "      var grab = function(ci) {",
+      "        if (ci == null) return null;",
+      "        var v = instance.getDataAtCell(row, ci);",
+      "        return (v === null || v === '' || !isFinite(v)) ? null",
+      "                                                        : Number(v);",
+      "      };",
+      "      if (role === 'mean') digits = grab(rf.mean);",
+      "      else { digits = grab(rf.disp);",
+      "             if (digits === null) digits = grab(rf.mean); }",
+      "      if (digits !== null && digits >= 0 && digits <= 8)",
+      "        td.textContent = Number(value).toFixed(digits);",
+      "    }",
+      "  }",
       "  var iss = instance.params ? instance.params.cellIssues : null;",
       "  if (iss) {",
       "    var key = row + '|' + col;",
