@@ -253,6 +253,24 @@ P_Calc <- function(TRIAL, DATA, CategoryNames, m)
         # Expected cells use the classical formula; ties are exact
         # because every statistic comes from the same integer margins.
           tab <- as.matrix(ROWS)
+          # FIX (2026-08-17, found by the corpus/TEST mass run): degenerate
+          # tables crashed the whole analysis. A category cell can be NA
+          # (one arm's line carries a category the other arm's does not),
+          # and a category column can sum to zero; either way the expected
+          # counts contain zeros, the chi-square statistic is NaN, and
+          # if (P == 1) on NaN is a fatal error. Refuse such rows with a
+          # message instead - consistent with the app's refuse-rather-
+          # than-guess rule - after dropping zero-margin columns, which
+          # carry no information.
+          if (any(is.na(tab)))
+          {
+            P <- "Incomplete category counts across arms"
+          } else {
+          tab <- tab[, colSums(tab) > 0, drop = FALSE]
+          if (ncol(tab) < 2 || any(rowSums(tab) == 0))
+          {
+            P <- "Degenerate category table (an arm or every remaining category is empty)"
+          } else {
           E <- outer(rowSums(tab), colSums(tab)) / sum(tab)
           statObs <- sum((tab - E)^2 / E)
           statSim <- vapply(
@@ -260,6 +278,8 @@ P_Calc <- function(TRIAL, DATA, CategoryNames, m)
             function(s) sum((s - E)^2 / E), numeric(1))
           PEQ <- sum(statSim == statObs) / m
           P <- sum(statSim < statObs)/m + PEQ/2
+          }
+          }
         }
         # Need to be sure P != 0 or 1. (Guarded: the median/IQR branch can
         # refuse a row with a message string instead of a number.)
