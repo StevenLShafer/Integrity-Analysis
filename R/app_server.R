@@ -129,24 +129,55 @@ app_server <- function(input, output, session) {
   # (row, col, code) map from the last validateData pass.
   rIssues <- reactiveVal(NULL)
 
+  # Table lines the PDF parser saw but could not use (r$skipped) become
+  # GRID ROWS - label in ROW, everything else empty - so a parse loss is
+  # a conspicuous colored row to fill in or delete, never a silent gap
+  # (the PMID 14984519 lesson: missed variables diluted a real alarm).
+  # This registry holds (TRIAL, ROW, reason); the renderer matches it
+  # against the displayed frame by TRIAL + ROW (indices survive edits)
+  # and paints the ROW cell red with the parser's reason as the hover
+  # text. A row stops matching - and stops being red - the moment the
+  # user fills any data into it, which is exactly right.
+  parseSkips <- reactiveVal(NULL)
+
+  # The legend IS the error report (Steve's direction, 2026-08-19): no
+  # explanatory text prints below the table, so each color carries its
+  # explanation here, and every colored cell explains itself on hover.
   output$issueLegend <- renderUI({
     if (is.null(rIssues())) return(NULL)
-    box <- function(color, label) tagList(
+    entry <- function(color, label, text) div(
+      style = "margin: 2px 0;",
       span(style = paste0("display:inline-block; width:14px; height:14px;",
                           "background:", color, "; border:1px solid #999;",
-                          "vertical-align:middle; margin-right:4px;")),
-      span(label, style = "margin-right: 16px;"))
+                          "vertical-align:middle; margin-right:6px;")),
+      tags$b(label), paste0(" - ", text))
     div(style = "margin: 4px 0 8px 0; font-size: 13px;",
-        box("#fff3b0", "missing"),
-        box("#f4b6b6", "unreadable"),
-        box("#b8d0f0", "incongruent"))
+        entry("#fff3b0", "missing", paste(
+          "a required value is empty. Enter it, or delete the row.",
+          "Rows with a label but no data at all are left out of the",
+          "analysis.")),
+        entry("#f4b6b6", "unreadable", paste(
+          "could not be read: text where a number belongs, or a table",
+          "line the PDF reader could not use. Hover the cell for the",
+          "reason.")),
+        entry("#b8d0f0", "incongruent", paste(
+          "the value conflicts with the row's type - for example an SD",
+          "on a median/IQR row, or continuous entries on a category",
+          "row.")),
+        div(style = "margin-top: 4px;", paste(
+          "Fix or delete the colored cells, then click Apply Edits &",
+          "Revalidate. Hover any colored cell for details.")))
   })
 
   output$dataGrid <- rhandsontable::renderRHandsontable({
     d <- reactiveData()
     if (is.null(d)) return(NULL)
-    # cell-issue payload for the renderer: keys "row|col", 0-based
+    # cell-issue payload for the renderer: keys "row|col", 0-based.
+    # cellNotes carries per-cell hover text where a specific reason is
+    # known (the parser's skip reasons); the renderer falls back to a
+    # generic per-color explanation otherwise.
     issPayload <- NULL
+    notePayload <- NULL
     iss <- rIssues()
     if (!is.null(iss)) {
       ci <- match(iss$col, names(d))
@@ -156,9 +187,34 @@ app_server <- function(input, output, session) {
         names(issPayload) <- paste0(iss$row[ok] - 1, "|", ci[ok] - 1)
       }
     }
+    sk <- parseSkips()
+    if (!is.null(sk) && nrow(sk) > 0 &&
+        all(c("TRIAL", "ROW") %in% names(d))) {
+      rowCol <- match("ROW", names(d))
+      dataCols <- intersect(c("N", "MEAN", "SD", "SE", "Q1", "Q3"),
+                            names(d))
+      for (s in seq_len(nrow(sk))) {
+        # match by TRIAL + ROW, but only rows still without data - once
+        # the user fills the line in, it is no longer an unread loss
+        hits <- which(as.character(d$TRIAL) == sk$TRIAL[s] &
+                      as.character(d$ROW) == sk$ROW[s])
+        hits <- hits[vapply(hits, function(r)
+          all(is.na(d[r, dataCols])), logical(1))]
+        for (r in hits) {
+          key <- paste0(r - 1, "|", rowCol - 1)
+          if (is.null(issPayload)) issPayload <- list()
+          if (is.null(notePayload)) notePayload <- list()
+          issPayload[[key]] <- "unreadable"
+          notePayload[[key]] <- paste0(
+            "The PDF reader saw this table line but could not use it: ",
+            sk$reason[s])
+        }
+      }
+    }
     w <- rhandsontable::rhandsontable(
       d,
       cellIssues = issPayload,
+      cellNotes = notePayload,
       # cap the widget height; rhandsontable scrolls and virtualizes rows
       height = min(400, 60 + 24 * nrow(d)),
       rowHeaders = TRUE) |>
@@ -191,10 +247,21 @@ app_server <- function(input, output, session) {
       "  base.apply(this, arguments);",
       "  var iss = instance.params ? instance.params.cellIssues : null;",
       "  if (iss) {",
-      "    var code = iss[row + '|' + col];",
+      "    var key = row + '|' + col;",
+      "    var code = iss[key];",
+      "    var help = {",
+      "      missing: 'A required value is missing. Enter it, or delete ",
+                       "the row.',",
+      "      unreadable: 'This could not be read as a number.',",
+      "      incongruent: 'This value conflicts with the type of the ",
+                          "row.'};",
       "    if (code === 'missing') td.style.background = '#fff3b0';",
       "    else if (code === 'unreadable') td.style.background = '#f4b6b6';",
       "    else if (code === 'incongruent') td.style.background = '#b8d0f0';",
+      "    if (code) {",
+      "      var notes = instance.params.cellNotes;",
+      "      td.title = (notes && notes[key]) ? notes[key] : help[code];",
+      "    }",
       "  }",
       "}")
     measureCols <- intersect(c("MEAN", "SD", "SE"), names(d))
@@ -323,6 +390,7 @@ app_server <- function(input, output, session) {
     output$GoButton <- NULL
     output$downloadButton <- NULL
     rIssues(NULL)   # fresh empty table - no issue colors yet
+    parseSkips(NULL)
     blank <- data.frame(
       TRIAL = rep(NA_character_, 8), ROW = NA_character_,
       N = NA_real_, MEAN = NA_real_, SD = NA_real_, SE = NA_real_,
@@ -420,6 +488,7 @@ app_server <- function(input, output, session) {
       output$GoButton <- NULL
       output$downloadButton <- NULL
       rIssues(NULL)   # new upload - stale issue colors must not carry over
+      parseSkips(NULL)
 
       # Multi-file upload (Steve's request, 2026-08-17): any mix of
       # csv/xls/xlsx/PDF in one selection. Every file becomes a data
@@ -511,17 +580,25 @@ app_server <- function(input, output, session) {
             ": table page ", res$page[k], ", ", res$arms[k], " arm(s) (",
             res$armsWithN[k], " with N), ", res$variables[k],
             " variable(s), ", res$continuous[k], " with mean and SD."))
-          if (nrow(r$skipped) > 0) {
-            outputComments(paste0(
-              nrow(r$skipped), " table line(s) could not be used:"))
-            for (s in seq_len(nrow(r$skipped)))
-              outputComments(paste0("- ", r$skipped$label[s], ": ",
-                                    r$skipped$reason[s]))
-          }
           d <- r$data
           d$TRIAL <- files$stem[i]   # opaque temp name -> the user's name
+          # Table lines the parser could not use become GRID ROWS - the
+          # label in ROW, everything else empty - instead of log text
+          # (Steve's direction, 2026-08-19). Their ROW cells paint red
+          # with the parser's reason on hover (see parseSkips above),
+          # their required cells paint yellow, and validation leaves them
+          # out of the analysis until the user fills them in or deletes
+          # them.
+          if (nrow(r$skipped) > 0) {
+            extra <- d[rep(NA_integer_, nrow(r$skipped)), , drop = FALSE]
+            extra$TRIAL <- files$stem[i]
+            extra$ROW <- r$skipped$label
+            rownames(extra) <- NULL
+            d <- rbind(d, extra)
+          }
           frames[[length(frames) + 1]] <-
-            list(stem = files$stem[i], data = d)
+            list(stem = files$stem[i], data = d,
+                 skips = if (nrow(r$skipped) > 0) r$skipped else NULL)
         }
       }
 
@@ -567,6 +644,16 @@ app_server <- function(input, output, session) {
         outputComments(paste0("Combined ", length(frames), " file(s): ",
                               nrow(DATA), " rows, ",
                               length(unique(DATA$TRIAL)), " trial(s)."))
+      # Register the parser's skipped lines under each frame's FINAL
+      # trial value (disambiguation above may have prefixed it) so the
+      # grid renderer can find and paint their rows.
+      skipReg <- do.call(rbind, lapply(frames, function(f) {
+        if (is.null(f$skips)) return(NULL)
+        data.frame(TRIAL = as.character(f$data$TRIAL[1]),
+                   ROW = f$skips$label, reason = f$skips$reason,
+                   stringsAsFactors = FALSE)
+      }))
+      parseSkips(skipReg)
       reactiveData(DATA)
     }
   )

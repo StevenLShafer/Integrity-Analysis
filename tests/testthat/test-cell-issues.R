@@ -77,6 +77,33 @@ test_that("non-integer values in a would-be category column are a SOFT warning",
                   v$issues$code == "incongruent"))
 })
 
+test_that("an SE beside a missing SD paints the SE incongruent too", {
+  v <- vd(contFrame(ROW = "Age", N = 20, MEAN = 50, SD = NA_real_,
+                    SE = 1.4))
+  expect_true(v$FAIL)
+  expect_true(any(v$issues$row == 1 & v$issues$col == "SD" &
+                  v$issues$code == "missing"))
+  expect_true(any(v$issues$row == 1 & v$issues$col == "SE" &
+                  v$issues$code == "incongruent"))
+})
+
+test_that("label-only rows are soft-flagged and excluded from analysis", {
+  # a ROW name with no data anywhere: what a parser-skipped table line
+  # looks like once surfaced in the grid - painted, non-blocking,
+  # excluded from the analyzed data
+  v <- vd(contFrame(ROW = c("Age", "Pain score, median [range]"),
+                    N = c(20, NA), MEAN = c(50, NA), SD = c(9, NA)))
+  expect_false(v$FAIL)
+  expect_true(any(v$issues$row == 2 & v$issues$col == "SD" &
+                  v$issues$code == "missing"))
+  expect_identical(v$DATA$ROW, "Age")   # excluded from the analyzed frame
+
+  # ... but a table that is ONLY labels has nothing to analyze: failure
+  v2 <- vd(contFrame(ROW = c("Age", "Weight"),
+                     N = NA_real_, MEAN = NA_real_, SD = NA_real_))
+  expect_true(v2$FAIL)
+})
+
 test_that("a fully valid table returns NULL issues", {
   v <- vd(contFrame(ROW = c("Age", "Weight"), N = c(20, 20),
                     MEAN = c(50, 70), SD = c(9, 8)))
@@ -89,6 +116,32 @@ test_that("the widget carries cellIssues into instance.params", {
     data.frame(a = 1, b = 2),
     cellIssues = list("0|1" = "missing"))
   expect_identical(w$x$cellIssues[["0|1"]], "missing")
+})
+
+test_that("a parser-skipped table line becomes a painted grid row", {
+  pdfPath <- syntheticPdfMeanSD()
+  shiny::testServer(app_server, {
+    session$setInputs(upload = data.frame(
+      name = "meanSD.pdf", datapath = pdfPath, stringsAsFactors = FALSE))
+    d <- reactiveData()
+    # the skipped median [range] line is now a grid row: its label in
+    # ROW, no data anywhere
+    i <- which(grepl("Duration", d$ROW))
+    expect_length(i, 1)
+    expect_true(all(is.na(d[i, intersect(c("N", "MEAN", "SD"),
+                                         names(d))])))
+    # registered for painting, with the parser's reason preserved
+    sk <- parseSkips()
+    expect_false(is.null(sk))
+    expect_true(any(grepl("Duration", sk$ROW)))
+    expect_match(sk$reason[grepl("Duration", sk$ROW)][1], "median",
+                 ignore.case = TRUE)
+    # soft warning: required cells yellow, but validation passes and the
+    # Analyze button path stays open
+    expect_true(any(rIssues()$code == "missing"))
+    # the widget carries the red ROW cell for the skipped line
+    expect_match(output$dataGrid, "unreadable")
+  })
 })
 
 test_that("the server paints on validation failure and clears on new input", {

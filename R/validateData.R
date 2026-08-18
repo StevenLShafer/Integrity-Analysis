@@ -6,8 +6,11 @@
 # with it. One deliberate change, verified bit-identical under fixed seeds
 # (see the phase-2 PR): instead of mutating the server's session state with
 # <<-, validateData() RETURNS everything it derives and app_server assigns.
-# outputComments() still reports line-by-line problems to the session log -
-# it recovers the active session itself, so being called from an ordinary
+# outputComments() reports STRUCTURAL problems (a missing column - nothing
+# to paint) to the session log; per-cell problems communicate through the
+# issues frame and the grid's colored cells alone (Steve's direction,
+# 2026-08-19 - no explanatory text below the table). outputComments()
+# recovers the active session itself, so being called from an ordinary
 # function changes nothing. Every FIX comment travels with its code.
 
 #' Is a column a category (count) column?
@@ -76,7 +79,6 @@ validateData <- function(DATA) {
 
   names(DATA) <- toupper(trimws(names(DATA)))
   ColumnNames <- names(DATA)
-  outputComments(paste("Column names:", paste(ColumnNames, collapse = ", ")))
 
   # Add trial number if necessary
   # FIX: the rename is now inside an else branch. It previously ran
@@ -269,36 +271,42 @@ validateData <- function(DATA) {
   }
 
   if (length(CategoryNames) == 0)
-  {
     CategoryNames <- NULL
-  } else {
-    outputComments(paste("Category Names", paste(CategoryNames, collapse=", "), "\n"))
-  }
 
   # Validate each line
+  # Steve's direction (2026-08-19): validation problems communicate
+  # through the colored cells and the grid legend ONLY - the per-line
+  # explanatory messages that used to print below the table are gone.
+  # Structural problems with no cell to color (a missing column) still
+  # log, because there is nothing to paint.
+
+  # A LABEL-ONLY row - a ROW name with no data in any analyzable column -
+  # is a SOFT warning, not a failure: its required cells paint yellow and
+  # the row is excluded from the analyzed data. This is what a table line
+  # the PDF parser could not use looks like once it is surfaced in the
+  # grid (the server adds those rows so parse losses are conspicuous,
+  # colored, and fixable), and blocking the analysis until every such row
+  # is deleted would punish exactly the user the colors are meant to help.
+  analyzableCols <- intersect(c("N", "MEAN", "SD", "SE", "Q1", "Q3"),
+                              names(DATA))
+  labelOnly <- logical(nrow(DATA))
+
   for (i in 1:nrow(DATA))
   {
+    if (!is.na(DATA$ROW[i]) && trimws(as.character(DATA$ROW[i])) != "" &&
+        all(is.na(DATA[i, c(analyzableCols, CategoryNames)])))
+    {
+      labelOnly[i] <- TRUE
+      for (cn in c("N", "MEAN", "SD"))
+        if (!isUnreadable(i, cn)) addIssue(i, cn, "missing")
+      next
+    }
     if (any(!is.na(DATA[i, CategoryNames]))) # If there is any category entry, continuous columns are set to NA
     {
       DATA$ROUND_MEAN[i] <- DATA$ROUND_OBSERVATION[i] <- NA
       if (any(!is.na(DATA[i, intersect(c("N", "MEAN", "SD", "Q1", "Q3"),
                                        names(DATA))])))
       {
-        outputComments(paste("Please look at line", i+1))
-        message <- NULL
-        if (!is.na(DATA$N[i])) message <- paste(message, "N = ", DATA$N[i])
-        if (!is.na(DATA$MEAN[i]))
-        {
-          if (!is.null(message)) message <- paste0(message, ", ")
-          message <- paste(message, "MEAN = ", DATA$MEAN[i])
-        }
-        if (!is.na(DATA$SD[i]))
-        {
-          if (!is.null(message)) message <- paste0(message, ", ")
-          message <- paste(message, "SD = ", DATA$SD[i])
-        }
-        outputComments(paste("This appears to be a category. However, it has entries for continuous variables."))
-        outputComments(paste("Specifically: ", message))
         for (cn in intersect(c("N", "MEAN", "SD", "Q1", "Q3"),
                              names(DATA)))
           if (!is.na(DATA[[cn]][i])) addIssue(i, cn, "incongruent")
@@ -316,18 +324,10 @@ validateData <- function(DATA) {
       hasQ3 <- "Q3" %in% names(DATA) && !is.na(DATA$Q3[i])
       if (!hasQ1 || !hasQ3)
       {
-        outputComments(paste("Please look at line", i+1))
-        outputComments(paste(
-          "This row reports quartiles, but only one of Q1/Q3 is filled",
-          "in. A median row needs both."))
         addIssue(i, if (hasQ1) "Q3" else "Q1", "missing")
         FAIL <- TRUE
       } else if (is.na(DATA$N[i]) || is.na(DATA$MEAN[i]))
       {
-        outputComments(paste("Please look at line", i+1))
-        outputComments(paste(
-          "This is a median/IQR row (Q1 and Q3 are filled in), so it",
-          "needs N and the median in the MEAN column."))
         for (cn in c("N", "MEAN"))
           if (is.na(DATA[[cn]][i]) && !isUnreadable(i, cn))
             addIssue(i, cn, "missing")
@@ -335,20 +335,11 @@ validateData <- function(DATA) {
       } else if (!is.na(DATA$SD[i]) ||
                  ("SE" %in% names(DATA) && !is.na(DATA$SE[i])))
       {
-        outputComments(paste("Please look at line", i+1))
-        outputComments(paste(
-          "This row has quartiles AND an SD or SE. With Q1/Q3 filled in,",
-          "MEAN is read as the MEDIAN - remove either the quartiles or",
-          "the SD/SE so the row is unambiguous."))
         for (cn in intersect(c("SD", "SE"), names(DATA)))
           if (!is.na(DATA[[cn]][i])) addIssue(i, cn, "incongruent")
         FAIL <- TRUE
       } else if (DATA$Q1[i] > DATA$MEAN[i] || DATA$MEAN[i] > DATA$Q3[i])
       {
-        outputComments(paste("Please look at line", i+1))
-        outputComments(paste0(
-          "The median must lie between its quartiles: Q1 = ", DATA$Q1[i],
-          ", median = ", DATA$MEAN[i], ", Q3 = ", DATA$Q3[i], "."))
         for (cn in c("MEAN", "Q1", "Q3")) addIssue(i, cn, "incongruent")
         FAIL <- TRUE
       } else {
@@ -362,33 +353,13 @@ validateData <- function(DATA) {
     } else {
       if (any(is.na(DATA[i, c("N", "MEAN", "SD")])))
       {
-        outputComments(paste("Please look at line", i+1))
-        message <- NULL
-        if (is.na(DATA$N[i])) message <- paste(message, "N = ", DATA$N[i])
-        if (is.na(DATA$MEAN[i]))
-        {
-          if (!is.null(message)) message <- paste0(message, ", ")
-          message <- paste(message, "MEAN = ", DATA$MEAN[i])
-        }
-        if (is.na(DATA$SD[i]))
-        {
-          if (!is.null(message)) message <- paste0(message, ", ")
-          message <- paste(message, "SD = ", DATA$SD[i])
-        }
-        outputComments(paste("This appears to be a continuous variable. However, it has NA entries for required fields."))
-        outputComments(paste("Specifically: ", message))
-        # A row carrying a standard error instead of a standard deviation
-        # is a different problem from a row that is simply blank, and the
-        # user can fix it - so say which it is rather than reporting a bare
-        # "SD = NA". The conversion is deliberately NOT done here: it needs
-        # N, and it is a decision about the analysis, not data entry.
+        # An SE beside a missing SD is a different problem from a blank
+        # row - the SE cell is INCONGRUENT (the analysis needs an SD;
+        # the SE-to-SD conversion needs N and is an analysis decision,
+        # so it is not made silently). Everything else missing is plain
+        # yellow.
         if ("SE" %in% names(DATA) && !is.na(DATA$SE[i]) && is.na(DATA$SD[i]))
-          outputComments(paste0(
-            "Line ", i + 1, " reports a standard error (SE = ", DATA$SE[i],
-            "), not a standard deviation. The analysis needs an SD. ",
-            "Enter the SD, or convert the SE yourself - the conversion ",
-            "needs N and is a decision about the analysis, so it is not ",
-            "made for you."))
+          addIssue(i, "SE", "incongruent")
         for (cn in c("N", "MEAN", "SD"))
           if (is.na(DATA[[cn]][i]) && !isUnreadable(i, cn))
             addIssue(i, cn, "missing")
@@ -415,14 +386,22 @@ validateData <- function(DATA) {
 
   if (FAIL)
   {
-    outputComments("There are one or more errors in the data table. Please review the above messages to address these.")
-    outputComments(paste(
-      "Problem cells are colored in the table above: yellow = missing,",
-      "red = unreadable, blue = incongruent."))
-    # Issue 13: return the NORMALIZED frame (pre-sort, so issue row
-    # numbers still index it) together with the cell issues, so the grid
-    # can display the very frame the issues refer to.
+    # No log text (Steve's direction, 2026-08-19): the colored cells and
+    # the legend below the grid are the entire error report. Return the
+    # NORMALIZED frame (pre-sort, so issue row numbers still index it)
+    # together with the cell issues, so the grid can display the very
+    # frame the issues refer to.
     return(list(FAIL = TRUE, DATA = DATA, issues = issueFrame()))
+  }
+  # Label-only rows (soft-flagged above) are excluded from the ANALYZED
+  # data only - the grid keeps showing them, painted, in the frame the
+  # issues index (the pre-validation frame the caller displays). If
+  # NOTHING analyzable remains, that is a failure after all.
+  if (any(labelOnly))
+  {
+    if (all(labelOnly))
+      return(list(FAIL = TRUE, DATA = DATA, issues = issueFrame()))
+    DATA <- DATA[!labelOnly, , drop = FALSE]
   }
   # Carry SE, Q1/Q3, and ROUND_DISPERSION through when the input supplies
   # them. They are optional: a spreadsheet typed by hand, or written
