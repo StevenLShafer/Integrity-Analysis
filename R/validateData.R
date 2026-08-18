@@ -69,9 +69,12 @@ validateData <- function(DATA) {
   # the detail view; the colors are the map. The same codes are the API
   # spec's machine-readable issues[] (docs/api-spec.md).
   issues <- list()
-  addIssue <- function(row, col, code)
+  # note: optional cell-specific hover text; NA falls back to the
+  # renderer's generic per-color explanation
+  addIssue <- function(row, col, code, note = NA_character_)
     issues[[length(issues) + 1]] <<- data.frame(
-      row = row, col = col, code = code, stringsAsFactors = FALSE)
+      row = row, col = col, code = code, note = note,
+      stringsAsFactors = FALSE)
   issueFrame <- function() {
     if (length(issues) == 0) return(NULL)
     do.call(rbind, issues)
@@ -384,6 +387,34 @@ validateData <- function(DATA) {
     }
   }
 
+  # A SINGLE-LINE categorical variable is unanalyzable: the method
+  # compares counts ACROSS arms, and one line is one arm. Real tables
+  # never print a one-arm category, but a misparsed PDF can produce one
+  # (Steve's Test4 report, 2026-08-19: footnote fragments became
+  # "variables" whose stray numbers landed in junk count columns, and
+  # the rows sat in the grid valid-looking and unflagged). Soft-flag the
+  # ROW cell with a specific hover note and leave the line out of the
+  # analysis, exactly like a label-only row.
+  singleCat <- logical(nrow(DATA))
+  if (!is.null(CategoryNames))
+  {
+    catLine <- vapply(seq_len(nrow(DATA)), function(i)
+      any(!is.na(DATA[i, CategoryNames])), logical(1))
+    for (key in unique(paste(DATA$TRIAL, DATA$ROW)[catLine]))
+    {
+      g <- which(paste(DATA$TRIAL, DATA$ROW) == key & catLine)
+      if (length(g) == 1)
+      {
+        singleCat[g] <- TRUE
+        addIssue(g, "ROW", "missing", paste(
+          "This looks like a categorical line, but it has no matching",
+          "line for another arm - a category needs counts in at least",
+          "two arms to compare. It is left out of the analysis: fill in",
+          "the other arm(s), or delete the row."))
+      }
+    }
+  }
+
   if (FAIL)
   {
     # No log text (Steve's direction, 2026-08-19): the colored cells and
@@ -393,15 +424,17 @@ validateData <- function(DATA) {
     # frame the issues refer to.
     return(list(FAIL = TRUE, DATA = DATA, issues = issueFrame()))
   }
-  # Label-only rows (soft-flagged above) are excluded from the ANALYZED
-  # data only - the grid keeps showing them, painted, in the frame the
-  # issues index (the pre-validation frame the caller displays). If
-  # NOTHING analyzable remains, that is a failure after all.
-  if (any(labelOnly))
+  # Label-only rows and single-line categoricals (soft-flagged above)
+  # are excluded from the ANALYZED data only - the grid keeps showing
+  # them, painted, in the frame the issues index (the pre-validation
+  # frame the caller displays). If NOTHING analyzable remains, that is a
+  # failure after all.
+  excluded <- labelOnly | singleCat
+  if (any(excluded))
   {
-    if (all(labelOnly))
+    if (all(excluded))
       return(list(FAIL = TRUE, DATA = DATA, issues = issueFrame()))
-    DATA <- DATA[!labelOnly, , drop = FALSE]
+    DATA <- DATA[!excluded, , drop = FALSE]
   }
   # Carry SE, Q1/Q3, and ROUND_DISPERSION through when the input supplies
   # them. They are optional: a spreadsheet typed by hand, or written

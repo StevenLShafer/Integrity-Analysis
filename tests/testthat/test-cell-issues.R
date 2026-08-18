@@ -104,6 +104,33 @@ test_that("label-only rows are soft-flagged and excluded from analysis", {
   expect_true(v2$FAIL)
 })
 
+test_that("a single-line categorical variable is soft-flagged and excluded", {
+  # Steve's Test4 report (2026-08-19): a misparsed footnote fragment
+  # became a "variable" with one stray count in a junk category column -
+  # a valid-looking, unflagged, unanalyzable row. One categorical line
+  # is one arm; there is nothing to compare it against.
+  v <- vd(contFrame(ROW = c("Age", "Age", "Use of PCA"),
+                    N = c(15, 17, NA), MEAN = c(45.3, 46.1, NA),
+                    SD = c(12.1, 11.8, NA), PCA = c(NA, NA, 1)))
+  expect_false(v$FAIL)
+  hit <- v$issues[v$issues$row == 3 & v$issues$col == "ROW", ]
+  expect_identical(hit$code, "missing")
+  expect_match(hit$note, "two arms")   # the cell-specific hover text
+  expect_false("Use of PCA" %in% v$DATA$ROW)   # left out of the analysis
+
+  # a category with counts in two arms is untouched
+  v2 <- vd(contFrame(ROW = c("Age", "Age", "Sex", "Sex"),
+                     N = c(15, 17, NA, NA), MEAN = c(45.3, 46.1, NA, NA),
+                     SD = c(12.1, 11.8, NA, NA), MALE = c(NA, NA, 10, 12)))
+  expect_false(v2$FAIL)
+  expect_null(v2$issues)
+
+  # a table that is ONLY unanalyzable lines fails
+  v3 <- vd(contFrame(ROW = "Use of PCA", N = NA_real_, MEAN = NA_real_,
+                     SD = NA_real_, PCA = c(1)))
+  expect_true(v3$FAIL)
+})
+
 test_that("a fully valid table returns NULL issues", {
   v <- vd(contFrame(ROW = c("Age", "Weight"), N = c(20, 20),
                     MEAN = c(50, 70), SD = c(9, 8)))

@@ -199,6 +199,16 @@ app_server <- function(input, output, session) {
       if (any(ok)) {
         issPayload <- as.list(iss$code[ok])
         names(issPayload) <- paste0(iss$row[ok] - 1, "|", ci[ok] - 1)
+        # cell-specific hover text where validateData supplied one
+        # (e.g. the single-line-categorical explanation)
+        if ("note" %in% names(iss)) {
+          noted <- ok & !is.na(iss$note)
+          if (any(noted)) {
+            notePayload <- as.list(iss$note[noted])
+            names(notePayload) <- paste0(iss$row[noted] - 1, "|",
+                                         ci[noted] - 1)
+          }
+        }
       }
     }
     sk <- parseSkips()
