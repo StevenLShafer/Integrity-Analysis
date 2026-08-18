@@ -397,6 +397,26 @@ app_server <- function(input, output, session) {
 
       frames <- list()
 
+      # Sequential uploads APPEND (Steve, 2026-08-19): the current table
+      # - including any edits typed into the grid but not yet
+      # revalidated - becomes the first "frame", so a later upload adds
+      # rows instead of replacing everything. The existing combining
+      # machinery then handles column union and trial disambiguation
+      # exactly as it does across files in one selection (the current
+      # table's trials are seeded first, so a clashing new file gets the
+      # "filename: " prefix, never the other way around). Start With an
+      # Empty Table remains the way to start over. All-empty rows (the
+      # blank starter's untyped placeholders) are dropped first.
+      prior <- currentGrid()
+      if (!is.null(prior) && nrow(prior) > 0) {
+        keep <- apply(prior, 1, function(r)
+          any(!is.na(r) & trimws(as.character(r)) != ""))
+        prior <- prior[keep, , drop = FALSE]
+        if (nrow(prior) > 0)
+          frames[[1]] <- list(stem = "Existing table", data = prior)
+      }
+      nPrior <- length(frames)
+
       readSheet <- function(path, ext) {
         if (ext == "csv")  return(read.csv(path))
         if (ext == "xlsx") return(read.xlsx(path))
@@ -466,8 +486,12 @@ app_server <- function(input, output, session) {
         }
       }
 
-      if (length(frames) == 0) {
-        outputComments(paste(
+      if (length(frames) == nPrior) {
+        # no NEW file produced a table; leave the existing table alone
+        outputComments(if (nPrior > 0) paste(
+          "No uploaded file produced a usable table; the existing table",
+          "is unchanged.")
+        else paste(
           "No file produced a usable table. You can enter the data by",
           "hand: use Start With an Empty Table, or fill in the Template",
           "spreadsheet (sidebar) and upload it."))
@@ -504,10 +528,16 @@ app_server <- function(input, output, session) {
         for (nm in setdiff(allCols, names(d))) d[[nm]] <- NA
         d[, allCols, drop = FALSE]
       }))
-      if (length(frames) > 1)
+      if (nPrior > 0) {
+        outputComments(paste0(
+          "Appended ", length(frames) - nPrior, " file(s) to the ",
+          "existing table: now ", nrow(DATA), " rows, ",
+          length(unique(DATA$TRIAL)), " trial(s)."))
+      } else if (length(frames) > 1) {
         outputComments(paste0("Combined ", length(frames), " file(s): ",
                               nrow(DATA), " rows, ",
                               length(unique(DATA$TRIAL)), " trial(s)."))
+      }
       reactiveData(DATA)
     }
   )
