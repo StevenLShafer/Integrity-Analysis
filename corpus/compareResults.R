@@ -16,7 +16,15 @@
 suppressMessages(library(openxlsx))
 repo <- "C:/dev/IntegrityAnalysis"
 
-act <- read.xlsx(file.path(repo, "corpus", "ActualResults.xlsx"),
+# Optional args: [actualFile] [comparisonOut] (paths under corpus/),
+# so the continuous-only run compares without clobbering the full-table
+# comparison: Rscript corpus/compareResults.R ActualResults_continuous.xlsx
+#             Comparison_continuous.xlsx
+cargs <- commandArgs(TRUE)
+actFile <- if (length(cargs) >= 1) cargs[1] else "ActualResults.xlsx"
+outFile <- if (length(cargs) >= 2) cargs[2] else "Comparison.xlsx"
+
+act <- read.xlsx(file.path(repo, "corpus", actFile),
                  sheet = "Trials")
 exp <- read.xlsx(file.path(repo, "corpus", "ExpectedResults.xlsx"),
                  sheet = "Trials")
@@ -46,6 +54,6 @@ d <- d[order(-abs(d$logDiff)),
        c("FILE", "PMID", "actual", "expected", "logDiff")]
 wb <- createWorkbook()
 addWorksheet(wb, "Comparison"); writeData(wb, "Comparison", d)
-saveWorkbook(wb, file.path(repo, "corpus", "Comparison.xlsx"),
+saveWorkbook(wb, file.path(repo, "corpus", outFile),
              overwrite = TRUE)
-cat("written corpus/Comparison.xlsx (sorted worst-first on the log scale)\n")
+cat("written corpus/", outFile, " (sorted worst-first on the log scale)\n")

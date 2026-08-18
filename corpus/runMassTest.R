@@ -11,10 +11,15 @@
 # validateData -> P_Calc, so results are comparable to an in-app run.
 #
 # Usage:
-#   Rscript corpus/runMassTest.R [workDir]
+#   Rscript corpus/runMassTest.R [workDir] [mode]
 #     workDir  checkpoint directory (default C:/temp/MassTest_work);
 #              existing checkpoints are SKIPPED - delete the directory
 #              for a fresh run.
+#     mode     "all" (default) or "continuous": continuous drops the
+#              categorical rows before analysis, matching the scope of
+#              Carlisle's stored p-values (continuous variables only) for
+#              an apples-to-apples comparison (Steve, 2026-08-18). Output
+#              goes to ActualResults_continuous.xlsx in that mode.
 # Output: corpus/ActualResults.xlsx - per-line and per-trial one-sided P
 # for every TEST PDF, ready to compare against corpus/ExpectedResults.xlsx.
 
@@ -33,6 +38,8 @@ suppressWarnings(suppressPackageStartupMessages({
 }))
 a <- commandArgs(TRUE)
 workDir <- if (length(a) >= 1) a[1] else "C:/temp/MassTest_work"
+mode <- if (length(a) >= 2) a[2] else "all"
+stopifnot(mode %in% c("all", "continuous"))
 dir.create(workDir, showWarnings = FALSE, recursive = TRUE)
 testDir <- file.path("C:/dev/IntegrityAnalysis", "corpus", "TEST")
 pdfs <- list.files(testDir, "[.]pdf$", full.names = TRUE)
@@ -57,9 +64,24 @@ for (i in seq_along(pdfs)) {
       list(file = basename(f), ok = FALSE,
            error = "parsed table failed validation")
     } else {
+      DATA <- v$DATA
+      catNames <- v$CategoryNames
+      if (mode == "continuous") {
+        # Carlisle's stored p covers continuous variables only; in the
+        # validated table, categorical lines are exactly those with NA
+        # MEAN. Drop them and analyze with no category columns so the
+        # comparison is scope-matched.
+        DATA <- DATA[!is.na(DATA$MEAN), , drop = FALSE]
+        catNames <- NULL
+      }
+      if (nrow(DATA) == 0) {
+        list(file = basename(f), ok = FALSE,
+             error = "no continuous rows after filtering")
+      } else {
       x <- suppressWarnings(shiny::isolate(IntegrityAnalysis:::P_Calc(
-        v$TRIALS[1], v$DATA, v$CategoryNames, IntegrityAnalysis:::m)))
+        v$TRIALS[1], DATA, catNames, IntegrityAnalysis:::m)))
       list(file = basename(f), ok = TRUE, result = x)
+      }
     }
   }
   saveRDS(out, ck)
@@ -93,8 +115,10 @@ for (ck in cks) {
 wb <- createWorkbook()
 addWorksheet(wb, "Lines");  writeData(wb, "Lines",  do.call(rbind, lines))
 addWorksheet(wb, "Trials"); writeData(wb, "Trials", do.call(rbind, trials))
+outName <- if (mode == "continuous") "ActualResults_continuous.xlsx"
+           else "ActualResults.xlsx"
 saveWorkbook(wb, file.path("C:/dev/IntegrityAnalysis", "corpus",
-                           "ActualResults.xlsx"), overwrite = TRUE)
-cat("written corpus/ActualResults.xlsx -",
+                           outName), overwrite = TRUE)
+cat("written corpus/", outName, " -",
     sum(vapply(trials, function(t) t$STATUS[1] == "analyzed", logical(1))),
     "of", length(cks), "analyzed\nMASS TEST DONE\n")
