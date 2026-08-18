@@ -317,6 +317,31 @@ impossible for the stated N and range, granularity tests (GRIM/GRIMMER — does 
 reported mean exist for an integer-valued measure at that N?), and terminal
 digit balance across arms rather than within a single table.
 
+**Candidates raised by Steve, 2026-08-17:**
+
+- **SPRITE** (https://shiny.ieis.tue.nl/sprite/, Heathers et al.):
+  reconstructs the possible samples behind a reported mean/SD of a bounded
+  integer scale. Passes the too-few-numbers test because it works on a
+  *single* reported pair, not a distribution of digits. Complementary, not
+  overlapping: it catches impossible or wildly implausible mean/SD pairs
+  within one row, where Carlisle–Shafer catches improbable *agreement
+  across arms*. Natural fit as a per-row plausibility flag (with GRIM/
+  GRIMMER) in the validation pass — cheap, deterministic, no simulation.
+- **Barnett's Bayesian baseline method**
+  (https://f1000research.com/articles/11-783,
+  https://aushsi.shinyapps.io/baseline/): a Bayesian re-formulation of the
+  Carlisle approach modeling under/over-dispersion of baseline t-statistics
+  with posterior probabilities instead of a frequentist p. Same evidence,
+  different inferential wrapper — so it is a *cross-check*, not an
+  independent signal. Worth reporting alongside if the posterior framing
+  helps editors; the corpus/TEST mass-test set (61 verified PDFs +
+  Carlisle expectations) is exactly the benchmark to run both methods on
+  and compare verdicts, as Steve proposed.
+
+Evaluation plan when picked up: run Carlisle–Shafer, Barnett, and
+SPRITE/GRIM flags over corpus/TEST; compare per-trial calls; adopt what
+adds discrimination, report what merely agrees as corroboration.
+
 ---
 
 ## 8. A URL keyword that unlocks AI parsing (future)
@@ -543,6 +568,47 @@ p roughly uniform; in the testthat suite) and direction tests. Worth
 considering later: a larger calibration study across N, skew, and rounding
 regimes, and checking the metalog null against other plausible shapes for
 sensitivity.
+
+---
+
+## 13. Color-coded grid cells replace the parse-error list (Steve, 2026-08-17)
+
+The line-by-line log is unusable for real review. Instead the grid itself
+carries the diagnosis: produce as much of the table as possible (already
+done) and color each problem cell — **yellow = missing** (e.g. no arm N),
+**red = unreadable** (parser saw something it could not turn into a
+number), **blue = incongruent** (e.g. a category value that is not an
+integer). Design: `validateData()` (and the PDF parse step) return a
+per-cell issue map `(row, column, code)` alongside FAIL; the grid renderer
+attaches it to the widget and a custom handsontable renderer paints
+backgrounds; the log remains as the detail view. The same issue taxonomy
+is the API's machine-readable `issues[]` codes (docs/api-spec.md), so app
+and API stay one system.
+
+---
+
+## 14. Documentation moves to HTML (decision pending Steve)
+
+The PDF documentation is stale (single-P output, PDF upload, grid, median
+rows, purge guarantee all missing). Recommendation: convert the Word
+source (`G:\Projects\Fraud\2025\Old Files\IntegrityAnalysis.docx`) to
+Markdown in `docs/`, maintain it there (versioned, diffable, updated in
+the same PR as the feature it describes), render to HTML served by the
+app ("Download Documentation" becomes "View Documentation"), and generate
+a PDF from the same source only if a file download is still wanted.
+
+---
+
+## 15. Journal-style baseline table view for editors (Steve, 2026-08-17)
+
+The cell-per-line grid looks nothing like a manuscript's Table 1, so an
+editor cannot eyeball what IntegrityAnalysis thought the baseline data
+were. Add a downloadable per-trial **reconstructed baseline table**:
+variables as rows, arms as columns, cells formatted the way journals
+print them — "mean (SD)", "median [Q1, Q3]", "n" for categories — built
+from the validated data. This is the artifact an editor compares against
+the manuscript page. Candidate for the API response too (issue 1 /
+api-spec open decision).
 
 ---
 

@@ -168,7 +168,52 @@ app_server <- function(input, output, session) {
     if (is.null(reactiveData())) return(NULL)
     tagList(
       actionButton("applyEdits", "Apply Edits & Revalidate"),
+      actionButton("addRows", "Add 5 Rows"),
+      div(style = "display: inline-block; vertical-align: top;",
+          textInput("newColName", NULL, placeholder = "new column name",
+                    width = "180px")),
+      actionButton("addCol", "Add Column"),
       HTML("<br><br>"))
+  })
+
+  # Explicit structural controls (Steve, 2026-08-17: the right-click menu
+  # proved undiscoverable/unreliable in deployment, and it can never NAME
+  # a new column - and column names are the data model). Both controls
+  # preserve any edits currently sitting in the grid (hot_to_r on the live
+  # widget), and skip the validation pass: adding empty structure is not
+  # a data change worth a fresh error log.
+  currentGrid <- function() {
+    if (!is.null(input$dataGrid)) {
+      if (is.data.frame(input$dataGrid)) input$dataGrid
+      else rhandsontable::hot_to_r(input$dataGrid)
+    } else reactiveData()
+  }
+
+  observeEvent(input$addRows, {
+    d <- currentGrid()
+    if (is.null(d)) return()
+    blank <- d[0, ]
+    blank[1:5, ] <- NA
+    skipValidation <<- TRUE
+    reactiveData(rbind(d, blank))
+  })
+
+  observeEvent(input$addCol, {
+    d <- currentGrid()
+    if (is.null(d)) return()
+    nm <- trimws(input$newColName)
+    if (!nzchar(nm)) {
+      outputComments("Type a name for the new column first.")
+      return()
+    }
+    if (toupper(nm) %in% toupper(names(d))) {
+      outputComments(paste0("A column named ", nm, " already exists."))
+      return()
+    }
+    d[[nm]] <- NA_real_   # numeric: new columns are category counts
+    skipValidation <<- TRUE
+    reactiveData(d)
+    updateTextInput(session, "newColName", value = "")
   })
 
   observeEvent(input$applyEdits, {
