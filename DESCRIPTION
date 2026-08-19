@@ -53,6 +53,7 @@ Collate:
   validateData.R
   P_Calc.R
   baselineTable.R
+  usageCount.R
   app_ui.R
   app_server.R
   app_run.R

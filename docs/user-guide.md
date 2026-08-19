@@ -34,6 +34,13 @@ downloads are generated straight into your browser, and nothing is
 logged. The deployed analysis is fully deterministic and offline — no
 document content is ever sent to any third-party service.
 
+**Usage counting:** I tabulate the number of times IntegrityAnalysis is
+opened and the number of analyses run — simple counts, and nothing
+else. Not even your IP address reaches the counter, because the count
+is sent by the server, not by your browser. I want to know whether the
+program is being used: there is no point maintaining a program that
+nobody uses. — *Steve Shafer*
+
 # Background
 
 For about 15 years, papers published by Yoshitaka Fujii had been
