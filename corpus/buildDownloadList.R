@@ -132,10 +132,15 @@ d$Status <- ifelse(
   ifelse(nzchar(d$OA.status) & d$OA.status != "closed",
          "manual: free copy online",
          "manual: subscription (Lane proxy)"))))
-# Trials whose DOI has not been through the census yet are unclassified
-# rather than "subscription"; say so instead of guessing.
-d$Status[!d$queried & !nzchar(d$Local.PDF) &
-           !grepl("^downloaded", d$PMC.status)] <- "manual: license unknown"
+# Trials the census could not speak to - no DOI in the master sheet, or a
+# DOI not yet queried - are unclassified rather than "subscription"; say
+# so instead of guessing. With the census complete these are exactly the
+# 132 trials that carry no DOI, so the label names that reason.
+unresolved <- !d$queried & !nzchar(d$Local.PDF) &
+  !grepl("^downloaded", d$PMC.status)
+d$Status[unresolved] <- ifelse(nzchar(d$DOI[unresolved]),
+                               "manual: license unknown (not yet queried)",
+                               "manual: no DOI, license never looked up")
 
 cat("\nStatus of the 5,088 trials:\n")
 print(table(d$Status))
@@ -253,7 +258,7 @@ notes <- data.frame(Notes = c(
   "Status     = have PDF (local corpus) / have PDF (PMC open access) /",
   "             auto-eligible: licensed open access (leave to a script) /",
   "             manual: free copy online / manual: subscription (Lane",
-  "             proxy) / manual: license unknown (census not finished).",
+  "             proxy) / manual: no DOI, license never looked up.",
   "SaveAs     = file name to save into C:/dev/IntegrityAnalysis/",
   "             .NewCarlisle - the parser pipeline keys on PMID.",
   "",
