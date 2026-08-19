@@ -30,6 +30,44 @@ concrete failures in hand.
   Rscript corpus/buildParseOutcomes.R C:/temp/journals C:/temp/ParseOutcomes_work
   ```
 
+## Growing the corpus: the acquisition pipeline
+
+The 1,865 PDFs on hand cover about a third of Carlisle's 5,088 trials.
+Three scripts, run in this order, close as much of the gap as the law
+allows — and make the remainder an explicit worklist rather than a
+vague backlog. All three write into the gitignored `.NewCarlisle/`.
+
+1. **`downloadNewCarlisle.R`** — the only script that fetches anything.
+   It downloads exactly the papers in **PMC's open access subset**, which
+   is explicitly licensed for bulk retrieval, and records every PMID's
+   outcome in `.NewCarlisle/manifest.csv`. Result: of 5,084 PMIDs, 4,771
+   have no PMC record, 308 are in PMC but not bulk-licensed, and **5 were
+   downloadable**. "Free to read" is not the same as licensed; free-to-
+   read deposits and publisher backfiles are deliberately skipped.
+
+2. **`unpaywallDiscovery.R`** — metadata only, downloads nothing. Asks
+   Unpaywall where a legal open copy of each DOI lives and under what
+   license, into `.NewCarlisle/unpaywall.csv`. This separates a CC-
+   licensed copy (a script may fetch it) from "bronze" (free to read on
+   the publisher's site, no license — a human may read it, a script may
+   not). One request per second; resumable.
+
+3. **`buildDownloadList.R`** — the worklist. Joins the trial-level master
+   sheet (`Carlisle Data with PMIDs and DOIs.xlsx`, sheet `All Data`)
+   against the two files above plus `pmid_map.csv` and
+   `ParseOutcomes.csv`, and writes
+   `.NewCarlisle/DownloadPriorityList.xlsx`: one row per trial, **sorted
+   ascending by Carlisle's trial p-value**, so the most homogeneous — most
+   worth examining — baseline tables come first. Sheet `Queue` holds the
+   trials with no automated route and no PDF yet; `Full list` holds all
+   5,088. Each row carries PubMed, publisher, Stanford-proxy and open-
+   access links and the file name to save under (`PMID_<pmid>.pdf`).
+   Re-run it as the census and the downloads progress.
+
+Steve works down the `Queue` **a handful per day** through Stanford's
+Lane Library. Individual downloads are within Lane's terms; systematic
+bulk retrieval is not, and no script in this repository attempts it.
+
 ## What is deliberately NOT here
 
 **The PDFs themselves.** The corpus is 1,865 published journal articles
