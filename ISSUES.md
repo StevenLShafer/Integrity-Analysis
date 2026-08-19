@@ -566,15 +566,9 @@ and API stay one system.
 
 ---
 
-## 14. Documentation moves to HTML (decision pending Steve)
+## 14. Documentation moves to HTML
 
-The PDF documentation is stale (single-P output, PDF upload, grid, median
-rows, purge guarantee all missing). Recommendation: convert the Word
-source (`G:\Projects\Fraud\2025\Old Files\IntegrityAnalysis.docx`) to
-Markdown in `docs/`, maintain it there (versioned, diffable, updated in
-the same PR as the feature it describes), render to HTML served by the
-app ("Download Documentation" becomes "View Documentation"), and generate
-a PDF from the same source only if a file download is still wanted.
+**Closed 2026-08-19** - see the Closed section at the bottom.
 
 ---
 
@@ -644,3 +638,24 @@ TESTING RULE learned the hard way: never hand a real file's path to
 `input$upload` in `testServer` - stage a copy in its own subdirectory
 of `tempdir()` first (the purge-on-exit handler deletes uploaded
 paths).
+
+
+### 14. Documentation moves to HTML (closed 2026-08-19)
+
+Done exactly as the issue recommended. The Word original became
+`docs/user-guide.md`, maintained in the repository and rendered by
+pandoc to the self-contained `inst/extdata/IntegrityAnalysis.html`
+(regeneration command in the Markdown's header comment and AGENTS.md).
+The sidebar's "Download Documentation" button is now a **View
+Documentation** link to https://integrityanalysis.io/guide.html, opened
+in a new tab - the very same file, republished by
+`.github/workflows/pages.yaml`, so the guide a reader sees is always the
+guide the deployed app was built from and no one reads a stale copy out
+of their Downloads folder. No PDF is generated; nobody asked for the
+file back.
+
+Closing it also completed the guide's "Results and downloads" section,
+which now describes all three worksheets of the results workbook - the
+`Test Results` audit trail column by column, the `Baseline Tables`
+reconstruction and its formatting rules, and the one-line-per-study
+`Summary` - rather than listing the tabs.

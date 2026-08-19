@@ -927,19 +927,13 @@ app_server <- function(input, output, session) {
         file)
     })
 
-  # The documentation is HTML (issue 14, 2026-08-19): the Markdown master
-  # is docs/user-guide.md, rendered by pandoc to the self-contained file
-  # served here (regeneration command in the .md's header comment and
-  # AGENTS.md). It replaced a 5 MB PDF that described the pre-2026 app
-  # (two-sided p, fixed 50,000 replicates, upload-only input).
-  output$documentation <- downloadHandler(
-    filename = function() {
-      "IntegrityAnalysis.html"
-    },
-    content = function(file) {
-      file.copy(system.file("extdata", "IntegrityAnalysis.html",
-                            package = "IntegrityAnalysis"), file)
-    })
+  # No documentation download handler: the sidebar now LINKS to
+  # https://integrityanalysis.io/guide.html (Steve's request,
+  # 2026-08-19). The page is the very same file - the Markdown master is
+  # docs/user-guide.md, pandoc renders it to
+  # inst/extdata/IntegrityAnalysis.html (regeneration command in the
+  # .md's header comment and AGENTS.md), and .github/workflows/pages.yaml
+  # publishes that file as /guide.html.
 
   output$template <- downloadHandler(
     filename = function() {

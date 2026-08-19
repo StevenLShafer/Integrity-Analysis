@@ -41,10 +41,21 @@ app_ui <- function(testNote = NULL)
     dashboardSidebar(
       collapsed = FALSE,
       title = "Instructions",
-      tags$style(".skin-blue .sidebar .shiny-download-link { color: #444; }"),
+      tags$style(paste(".skin-blue .sidebar .shiny-download-link,",
+                       ".skin-blue .sidebar a.btn { color: #444; }")),
       tags$style(".sidebar { height: 10px; }"),
       p(),
-      downloadButton("documentation", "Download Documentation"),
+      # The user guide is served as a web page rather than downloaded
+      # (Steve's request, 2026-08-19): it is the same file the pages
+      # workflow publishes as https://integrityanalysis.io/guide.html,
+      # so readers get the current guide, with its table of contents,
+      # in a new tab instead of a file in their Downloads folder.
+      tags$a(
+        href = "https://integrityanalysis.io/guide.html",
+        target = "_blank", rel = "noopener",
+        class = "btn btn-default",
+        icon("book"), "View Documentation"
+        ),
       p(),
       downloadButton("template", "Download Template"),
       p(),

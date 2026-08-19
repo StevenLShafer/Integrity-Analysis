@@ -14,8 +14,9 @@
     "C:\Program Files\Quarto\bin\tools\pandoc.exe" docs/user-guide.md
       -s --embed-resources --toc --metadata title="IntegrityAnalysis"
       -c docs/user-guide.css -o inst/extdata/IntegrityAnalysis.html
-  (one line; see AGENTS.md). The app serves inst/extdata/IntegrityAnalysis.html
-  from the "Download Documentation" button.
+  (one line; see AGENTS.md). The same file is published by
+  .github/workflows/pages.yaml as https://integrityanalysis.io/guide.html,
+  which the app's sidebar "View Documentation" link opens.
 -->
 
 **A Shiny implementation of the Carlisle–Shafer Monte Carlo analysis of
@@ -356,24 +357,43 @@ the log as it completes. (The user interface is otherwise occupied
 during a long run — live progress display is a known limitation on the
 roadmap.)
 
-**Download Results** — one workbook, three tabs:
+**Download Results** — one workbook, three worksheets. Together they
+answer three different questions: what happened line by line, what the
+app believed the data were, and what to report.
 
-- **Test Results** — one row per input line plus a Summary row per
-  trial, with columns:
+*Sheet 1, `Test Results`* — the audit trail: every line the analysis
+touched, in the order it ran, with a **Summary** row closing each trial
+and a blank row between trials.
 
 | Column | Meaning |
 |---|---|
-| `TRIAL`, `ROW` | identify the line |
-| `P (one-sided toward homogeneity)` | the mid-p described above; the Summary row holds the Stouffer-combined trial p |
-| `95% Monte Carlo bound` | the upper bound (rows with small p) or the Monte Carlo interval (trial p below 0.001) |
-| `Replicates` | how many simulations that row received (1,000 / 10,000 / 100,000) |
+| `TRIAL` | the trial identifier, as it appeared in the grid. Blank on the Summary row, which prints beneath its own trial's rows |
+| `ROW` | the variable identifier for that line, or `Summary` |
+| `P (one-sided toward homogeneity)` | the mid-p described above — small means *more homogeneous than chance*. On the Summary row this is the Stouffer-combined trial p |
+| `95% Monte Carlo bound` | how precisely the simulation pinned that number: an upper bound on a row p too small to resolve, and on the Summary row a bootstrap interval for the trial p when it fell below 0.001. Blank when the estimate needs no caveat |
+| `Replicates` | how many simulations that row actually received (1,000 / 10,000 / 100,000 — the adaptive scheme stops as soon as the p is resolved, so most rows show 1,000) |
 
-- **Baseline Tables** — the same cells, reorganized as each trial's
-  baseline table would appear in the original article (the
-  journal-style reconstruction described below), one table per trial
-  with its name above it.
-- **Summary** — one line per study: the study name, its combined
-  P value, and the 95% Monte Carlo interval when one was reported.
+*Sheet 2, `Baseline Tables`* — the reconstruction, one block per trial
+stacked down the sheet under a bold `Trial: <name>` heading: variables
+as rows, arms as columns, exactly as a journal prints Table 1.
+
+- Column headers carry each arm's N (`Arm 1 (n = 15)`); a line whose own
+  N differs — dropouts, missing data — says so in its own cell
+  (`; n = 14`).
+- A mean/SD variable prints as `mean (SD)`; a median/IQR variable prints
+  as `median [Q1, Q3]`; the row label says which.
+- A categorical variable becomes a heading line (`Sex, n`) with one
+  indented line per category, carrying the counts.
+- Every number is formatted at the **printed precision the analysis
+  assumed** (the rounding columns), so this sheet is the direct
+  comparison against the manuscript page: if it disagrees with the page,
+  so did the analysis.
+
+*Sheet 3, `Summary`* — one line per study, and nothing else: the trial
+name, its combined `P (one-sided toward homogeneity)`, and the
+`95% Monte Carlo interval` where one was reported. This is the sheet to
+keep when screening many manuscripts — the per-line detail stays in
+sheet 1 for the ones worth a second look.
 
 **Download Table** — the current grid as a spreadsheet. This is a valid
 input file: for a partially extracted PDF it is the round trip (fill the
