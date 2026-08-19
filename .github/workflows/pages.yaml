@@ -1,0 +1,52 @@
+# pages.yaml - publish https://integrityanalysis.io from site/ via
+# GitHub Pages (ISSUES.md issue 2).
+#
+# PROVENANCE: written by Claude Code (model Claude Fable 5), 2026-08-19.
+# Publishes on every push to main that touches the site, the user guide
+# (republished as /guide.html), or this workflow. Custom domain and
+# HTTPS enforcement are repository Pages settings (set via API), not
+# files here; DNS lives at pairNic.
+
+name: pages
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "site/**"
+      - "inst/extdata/IntegrityAnalysis.html"
+      - ".github/workflows/pages.yaml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Assemble the site
+        run: |
+          mkdir _site
+          cp -r site/* _site/
+          # the user guide, served as /guide.html (same file the app's
+          # Download Documentation button serves)
+          cp inst/extdata/IntegrityAnalysis.html _site/guide.html
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+      - id: deployment
+        uses: actions/deploy-pages@v4
