@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<!--
+  site/app/index.html - https://integrityanalysis.io/app/
+  Full-screen iframe wrapper around the shinyapps.io deployment, so the
+  app runs with the custom domain in the address bar - the same pattern
+  stanpumpr.io uses. The app itself is served, over its own HTTPS, from
+  steveshafer.shinyapps.io; this page is just the frame.
+
+  PROVENANCE: written by Claude Code (model Claude Fable 5), 2026-08-19
+  (ISSUES.md issue 2), modeled on the stanpumpr.io wrapper.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>IntegrityAnalysis</title>
+<style>
+  html, body, iframe, #outer {
+    width: 100%; height: 100%; padding: 0; margin: 0;
+  }
+  html, body { overflow: hidden; }
+  #outer {
+    overflow: auto; -webkit-overflow-scrolling: touch;
+    position: absolute; top: 0; left: 0; right: 0; bottom: 0;
+  }
+  #shinyapp {
+    position: absolute; top: 0; left: 0; right: 0; bottom: 0;
+    border: none;
+  }
+</style>
+</head>
+<body>
+<div id="outer">
+  <iframe id="shinyapp"
+          src="https://steveshafer.shinyapps.io/IntegrityAnalysis/"
+          title="IntegrityAnalysis"
+          allow="fullscreen"></iframe>
+</div>
+<noscript>
+  <p style="font-family: sans-serif; padding: 2em;">
+    This page embeds the IntegrityAnalysis application. If it does not
+    load, open it directly:
+    <a href="https://steveshafer.shinyapps.io/IntegrityAnalysis/">steveshafer.shinyapps.io/IntegrityAnalysis</a>
+  </p>
+</noscript>
+</body>
+</html>

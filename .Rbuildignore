@@ -23,3 +23,4 @@
 ^\.claude$
 ^.*\.tar\.gz$
 ^.*\.Rcheck$
+^site$

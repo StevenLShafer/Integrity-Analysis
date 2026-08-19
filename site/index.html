@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<!--
+  site/index.html - the landing page at https://integrityanalysis.io
+  (ISSUES.md issue 2). Served by GitHub Pages via
+  .github/workflows/pages.yaml; the "Launch" button goes to /app/, the
+  full-screen wrapper that keeps the domain in the address bar while the
+  app runs from shinyapps.io. Self-contained: no external assets.
+
+  PROVENANCE: written by Claude Code (model Claude Fable 5), 2026-08-19,
+  at Steve Shafer's request, for inviting journal editors-in-chief to
+  review the tool. Content condensed from docs/user-guide.md.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>IntegrityAnalysis — Evaluation of Baseline Data Integrity</title>
+<meta name="description" content="The Carlisle–Shafer Monte Carlo analysis of baseline data in randomized controlled trials: a screening tool for editors and reviewers.">
+<style>
+  :root {
+    --blue: #1a4c70; --accent: #2c6e9e; --bg: #ffffff; --ink: #222;
+  }
+  * { box-sizing: border-box; }
+  body {
+    font-family: -apple-system, "Segoe UI", Roboto, Helvetica, Arial,
+      sans-serif;
+    margin: 0; color: var(--ink); background: var(--bg);
+    line-height: 1.6;
+  }
+  header {
+    background: linear-gradient(160deg, #16405f, #2c6e9e);
+    color: #fff; padding: 3.2em 1.5em 2.6em; text-align: center;
+  }
+  header h1 { margin: 0 0 0.25em; font-size: 2.1em; letter-spacing: 0.3px; }
+  header p.sub { margin: 0 auto 1.6em; max-width: 38em; opacity: 0.93;
+    font-size: 1.12em; }
+  .launch {
+    display: inline-block; background: #fff; color: var(--blue);
+    font-weight: 700; font-size: 1.15em; padding: 0.75em 2.2em;
+    border-radius: 6px; text-decoration: none;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.25);
+  }
+  .launch:hover { background: #eaf2f8; }
+  main { max-width: 44em; margin: 0 auto; padding: 2.2em 1.5em 3.5em; }
+  h2 { color: var(--blue); margin-top: 1.8em; }
+  .privacy {
+    background: #f4f8fb; border-left: 5px solid var(--accent);
+    padding: 1em 1.3em; border-radius: 0 6px 6px 0; margin: 1.6em 0;
+  }
+  .privacy strong { color: var(--blue); }
+  ul.features { padding-left: 1.3em; }
+  ul.features li { margin: 0.45em 0; }
+  ol.refs { padding-left: 1.4em; font-size: 0.95em; }
+  ol.refs li { margin: 0.6em 0; }
+  a { color: var(--accent); }
+  footer {
+    border-top: 1px solid #dfe7ee; padding: 1.4em 1.5em 2.2em;
+    text-align: center; font-size: 0.92em; color: #555;
+  }
+  .center { text-align: center; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>IntegrityAnalysis</h1>
+  <p class="sub">Evaluation of baseline data integrity in randomized
+    controlled trials — the Carlisle&ndash;Shafer Monte&nbsp;Carlo
+    method, as a tool for editors, reviewers, and investigators.</p>
+  <a class="launch" href="app/">Launch IntegrityAnalysis&ensp;&rarr;</a>
+</header>
+
+<main>
+  <h2>What it does</h2>
+  <p>The baseline table of a randomized controlled trial reports samples
+    drawn from a single pre-treatment population, so the arm-to-arm
+    variation of its means and counts is statistically predictable.
+    Fabricated baseline data are routinely <em>too similar</em> across
+    arms &mdash; the signature by which John&nbsp;Carlisle unmasked the
+    Fujii fraud [1]. IntegrityAnalysis replays a submitted or published
+    trial&rsquo;s baseline table many thousands of times by
+    Monte&nbsp;Carlo simulation, reproducing the printed rounding
+    exactly, and reports one probability per trial: the chance that
+    random allocation would produce baseline data at least as
+    homogeneous as those reported [2,&nbsp;3]. A small value is a
+    <strong>screening signal that warrants scrutiny of the original
+    data</strong> &mdash; it is never, by itself, a verdict of
+    misconduct.</p>
+
+  <h2>Using it</h2>
+  <ul class="features">
+    <li>Upload the article <strong>PDF</strong> &mdash; the baseline
+      table is extracted automatically &mdash; or a spreadsheet, or
+      several files at once, or type the table directly into the
+      editable grid.</li>
+    <li>Validation reports problems by <strong>coloring the cells</strong>
+      of the grid; fix them in place and revalidate.</li>
+    <li>Results give a one-sided p&nbsp;value per baseline variable and
+      per trial, with the Monte&nbsp;Carlo precision made explicit.</li>
+    <li>A <strong>journal-style reconstruction</strong> of the baseline
+      table can be downloaded for side-by-side comparison against the
+      manuscript.</li>
+    <li>The engine reproduces Carlisle&rsquo;s published 2017 analysis of
+      5,087 trials with r&nbsp;=&nbsp;0.991 [3].</li>
+  </ul>
+  <p>The <a href="guide.html">user guide</a> documents the method, the
+    input formats, and the statistics in full.</p>
+
+  <div class="privacy">
+    <strong>Privacy:</strong> nothing you upload or enter is retained.
+    The uploaded PDF or spreadsheet, any data typed into the table, and
+    the analysis results are all purged when the session closes. No
+    record of the analysis is kept, and no document content is ever sent
+    to any third-party service &mdash; the analysis is deterministic and
+    self-contained. Manuscripts under review remain confidential.
+  </div>
+
+  <p class="center"><a class="launch" style="background: var(--accent); color: #fff;"
+    href="app/">Launch IntegrityAnalysis&ensp;&rarr;</a></p>
+
+  <h2>References</h2>
+  <ol class="refs">
+    <li>Carlisle JB. The analysis of 168 randomised controlled trials to
+      test data integrity. <em>Anaesthesia</em>. 2012;67:521&ndash;537.
+      <a href="https://doi.org/10.1111/j.1365-2044.2012.07128.x">doi:10.1111/j.1365-2044.2012.07128.x</a></li>
+    <li>Carlisle JB, Dexter F, Pandit JJ, Shafer SL, Yentis SM.
+      Calculating the probability of random sampling for continuous
+      variables in submitted or published randomised controlled trials.
+      <em>Anaesthesia</em>. 2015;70:848&ndash;858.
+      <a href="https://doi.org/10.1111/anae.13126">doi:10.1111/anae.13126</a></li>
+    <li>Carlisle JB. Data fabrication and other reasons for non-random
+      sampling in 5087 randomised, controlled trials in anaesthetic and
+      general medical journals. <em>Anaesthesia</em>.
+      2017;72:944&ndash;952.
+      <a href="https://doi.org/10.1111/anae.13938">doi:10.1111/anae.13938</a></li>
+  </ol>
+</main>
+
+<footer>
+  <p>Developed by <a href="mailto:steven.shafer@stanford.edu">Steve
+    Shafer</a> from John Carlisle&rsquo;s method. Open source:
+    <a href="https://github.com/StevenLShafer/IntegrityAnalysis">github.com/StevenLShafer/IntegrityAnalysis</a></p>
+</footer>
+
+</body>
+</html>
