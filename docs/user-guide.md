@@ -338,8 +338,10 @@ the log as it completes. (The user interface is otherwise occupied
 during a long run — live progress display is a known limitation on the
 roadmap.)
 
-**Download Results** — one row per input line plus a Summary row per
-trial, with columns:
+**Download Results** — one workbook, three tabs:
+
+- **Test Results** — one row per input line plus a Summary row per
+  trial, with columns:
 
 | Column | Meaning |
 |---|---|
@@ -347,6 +349,13 @@ trial, with columns:
 | `P (one-sided toward homogeneity)` | the mid-p described above; the Summary row holds the Stouffer-combined trial p |
 | `95% Monte Carlo bound` | the upper bound (rows with small p) or the Monte Carlo interval (trial p below 0.001) |
 | `Replicates` | how many simulations that row received (1,000 / 10,000 / 100,000) |
+
+- **Baseline Tables** — the same cells, reorganized as each trial's
+  baseline table would appear in the original article (the
+  journal-style reconstruction described below), one table per trial
+  with its name above it.
+- **Summary** — one line per study: the study name, its combined
+  P value, and the 95% Monte Carlo interval when one was reported.
 
 **Download Table** — the current grid as a spreadsheet. This is a valid
 input file: for a partially extracted PDF it is the round trip (fill the

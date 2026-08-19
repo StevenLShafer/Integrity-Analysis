@@ -870,13 +870,13 @@ app_server <- function(input, output, session) {
       paste0("Integrity Analysis.",format(Sys.time(), format = "%y%m%d-%H%M%S"), ".xlsx")
     },
     content = function(file) {
-      x <- OUTPUT
-      # One-sided toward homogeneity (issue 6): a single P column. Small
-      # P = baseline data more homogeneous than random sampling explains.
-      names(x) <- c("TRIAL", "ROW", "P (one-sided toward homogeneity)",
-                    "95% Monte Carlo bound",
-                    "Replicates")
-      write.xlsx(x, file)
+      # Three tabs (Steve's design, 2026-08-19): Test Results (the sheet
+      # exactly as before), Baseline Tables (journal-style
+      # reconstructions of what was analyzed), Summary (one line per
+      # study: name, combined P, Monte Carlo interval). Writer in
+      # R/baselineTable.R.
+      writeResultsWorkbook(OUTPUT, reactiveDataValidated(),
+                           CategoryNames, file)
     })
 
   # Download the current table (generalized 2026-08-17 from the single-PDF
