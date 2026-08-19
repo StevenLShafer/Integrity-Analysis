@@ -166,3 +166,86 @@ writeBaselineTablesXlsx <- function(tables, file) {
   openxlsx::saveWorkbook(wb, file, overwrite = TRUE)
   invisible(used)
 }
+
+#' Write the three-tab results workbook
+#'
+#' Steve's design (2026-08-19): the results download is one workbook
+#' with three sheets -
+#' \itemize{
+#'   \item \strong{Test Results}: the per-line results exactly as
+#'     before (TRIAL, ROW, one-sided P, Monte Carlo bound, replicates).
+#'   \item \strong{Baseline Tables}: the journal-style reconstruction of
+#'     every trial's baseline table (the same cells, organized as they
+#'     appeared in the original article), stacked with a bold trial
+#'     header above each.
+#'   \item \strong{Summary}: one line per study - the study name, its
+#'     combined P value, and the Monte Carlo interval when one was
+#'     reported.
+#' }
+#'
+#' @param results the accumulated raw results (columns TRIAL, ROW, P,
+#'   CI95, M - P_Calc's output, possibly several trials with NA spacer
+#'   rows).
+#' @param validated the validated data frame the analysis ran on
+#'   (validateData()$DATA).
+#' @param categoryNames category column names (validateData()
+#'   $CategoryNames), or NULL.
+#' @param file path of the xlsx to write.
+#' @noRd
+writeResultsWorkbook <- function(results, validated, categoryNames,
+                                 file) {
+  wb <- openxlsx::createWorkbook()
+  headStyle <- openxlsx::createStyle(textDecoration = "bold",
+                                     border = "bottom")
+  boldStyle <- openxlsx::createStyle(textDecoration = "bold")
+
+  ## 1 -- Test Results: the sheet exactly as the download always was
+  out <- results
+  names(out) <- c("TRIAL", "ROW", "P (one-sided toward homogeneity)",
+                  "95% Monte Carlo bound", "Replicates")
+  openxlsx::addWorksheet(wb, "Test Results")
+  openxlsx::writeData(wb, "Test Results", out, headerStyle = headStyle)
+  openxlsx::setColWidths(wb, "Test Results", cols = seq_along(out),
+                         widths = "auto")
+
+  ## 2 -- Baseline Tables: journal-style reconstructions, stacked
+  openxlsx::addWorksheet(wb, "Baseline Tables")
+  tabs <- buildBaselineTables(validated, categoryNames)
+  r <- 1
+  for (nm in names(tabs)) {
+    openxlsx::writeData(wb, "Baseline Tables",
+                        data.frame(x = paste0("Trial: ", nm)),
+                        startRow = r, colNames = FALSE)
+    openxlsx::addStyle(wb, "Baseline Tables", boldStyle,
+                       rows = r, cols = 1)
+    openxlsx::writeData(wb, "Baseline Tables", tabs[[nm]],
+                        startRow = r + 1, headerStyle = headStyle)
+    r <- r + nrow(tabs[[nm]]) + 3   # header line + column row + gap
+  }
+  openxlsx::setColWidths(
+    wb, "Baseline Tables",
+    cols = seq_len(max(vapply(tabs, ncol, integer(1)))), widths = "auto")
+
+  ## 3 -- Summary: one line per study
+  # P_Calc leaves TRIAL empty on its Summary line (it prints under the
+  # trial's rows), so carry the trial name down from the rows above.
+  trial <- NA_character_
+  rows <- list()
+  for (i in seq_len(nrow(results))) {
+    if (!is.na(results$TRIAL[i])) trial <- as.character(results$TRIAL[i])
+    if (!is.na(results$ROW[i]) && results$ROW[i] == "Summary")
+      rows[[length(rows) + 1]] <- data.frame(
+        TRIAL = trial, P = results$P[i], CI = results$CI95[i],
+        stringsAsFactors = FALSE)
+  }
+  s <- do.call(rbind, rows)
+  names(s) <- c("TRIAL", "P (one-sided toward homogeneity)",
+                "95% Monte Carlo interval")
+  openxlsx::addWorksheet(wb, "Summary")
+  openxlsx::writeData(wb, "Summary", s, headerStyle = headStyle)
+  openxlsx::setColWidths(wb, "Summary", cols = seq_along(s),
+                         widths = "auto")
+
+  openxlsx::saveWorkbook(wb, file, overwrite = TRUE)
+  invisible(file)
+}
