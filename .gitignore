@@ -12,6 +12,8 @@ rsconnect/
 *.Rcheck/
 *.tar.gz
 .Rproj.user/
+# R writes .Rhistory into whatever directory a session ran in
+.Rhistory
 IntegrityAnalysis.Rcheck/
 IntegrityAnalysis_*.tar.gz
 .NewCarlisle/
