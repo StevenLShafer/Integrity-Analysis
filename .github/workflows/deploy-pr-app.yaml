@@ -28,7 +28,7 @@ concurrency:
 jobs:
   deploy:
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    timeout-minutes: 120
     env:
       GITHUB_PAT: ${{ secrets.GITHUB_TOKEN }}
     steps:
@@ -54,6 +54,10 @@ jobs:
           PR_SHA: ${{ github.event.pull_request.head.sha }}
         run: |
           Rscript -e '
+            # First deploys from a fresh runner manifest force shinyapps to
+            # build a new package image, which can exceed rsconnect'"'"'s
+            # default per-request timeout while the client polls the build
+            options(rsconnect.http.timeout = 900)
             remotes::install_github("StevenLShafer/IntegrityAnalysis",
                                     ref = Sys.getenv("PR_SHA"),
                                     upgrade = "never", force = TRUE)
