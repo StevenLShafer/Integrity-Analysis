@@ -11,6 +11,10 @@
 
 #' Launch the Integrity Analysis Shiny app
 #'
+#' @param countUsage count anonymous usage events (session starts and
+#'   analyses run) to Steve's GoatCounter? Defaults to TRUE only when
+#'   there is no `testNote`, i.e. production. See R/usageCount.R for
+#'   the privacy design (the user's IP never reaches the counter).
 #' @param testNote optional single string shown as a prominent banner under
 #'   the header, naming the PR under test and what to look at (e.g.
 #'   `"PR #6: function extraction - exercise upload, validate, analyze"`).
@@ -18,7 +22,13 @@
 #'   passes this; production passes nothing and shows no banner.
 #'
 #' @export
-run_app <- function(testNote = NULL) {
+run_app <- function(testNote = NULL,
+                    countUsage = is.null(testNote)) {
+  # Anonymous usage counting (see R/usageCount.R): ON only for
+  # production (PR test apps pass a testNote, which disables it, so the
+  # counts reflect real use). The option is what countUsage() checks.
+  options(IntegrityAnalysis.countUsage = isTRUE(countUsage))
+
   suppressWarnings(suppressPackageStartupMessages({
     library(shiny)
     library(openxlsx)       # read.xlsx / write.xlsx (xlsx upload + results download)

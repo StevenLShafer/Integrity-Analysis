@@ -90,6 +90,17 @@ app_ui <- function(testNote = NULL)
           "of research.")))
         ),
       br(),
+      # Usage-counting disclosure, in Steve's first person (2026-08-19).
+      # Implementation and privacy design: R/usageCount.R.
+      h6(
+        strong("Usage counting: "),
+        "I tabulate the number of times IntegrityAnalysis is opened and",
+        "the number of analyses run - simple counts, and nothing else.",
+        "Not even your IP address reaches the counter, because the",
+        "count is sent by the server, not by your browser. I want to",
+        "know whether the program is being used: there is no point",
+        "maintaining a program that nobody uses. - Steve Shafer"
+        ),
       HTML(
         '<p>
         <h6>Please direct questions and feedback to Steve Shafer at

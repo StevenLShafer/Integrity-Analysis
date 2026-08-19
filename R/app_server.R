@@ -32,6 +32,10 @@
 
 
 app_server <- function(input, output, session) {
+  # one anonymous count per session (see R/usageCount.R; no-op unless
+  # run_app enabled it - production only)
+  countUsage("session")
+
   reactiveData <- reactiveVal()
   reactiveDataValidated <- reactiveVal()
   reactiveResults <- reactiveVal()
@@ -488,6 +492,7 @@ app_server <- function(input, output, session) {
       input$go
     },
     {
+      countUsage("analyze")   # anonymous count; no-op outside production
       output$stopButton <- NULL
       progress <- shiny::Progress$new(session, style = "notification")
       on.exit(progress$close())
