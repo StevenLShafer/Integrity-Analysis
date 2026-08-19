@@ -130,9 +130,17 @@ parsing challenge: `corpus/` (see its README).
   merge. The workflow is `.github/workflows/R-CMD-check.yaml`; it fails
   on ERRORs and tolerates the one documented `library()` WARNING (see
   the comment there). A PR whose check is red is not mergeable — fix
-  the tests, never bypass. The deploy trio (auto production deploy,
-  PR-app lifecycle) is still manual pending `SHINY_TOKEN`/`SHINY_SECRET`
-  repository secrets.
+  the tests, never bypass.
+- **The deploy trio is live** (2026-08-19, phase 5 complete):
+  `deploy-production.yaml` redeploys production on every push to
+  `main`; `deploy-pr-app.yaml` deploys `IntegrityAnalysis_PR_<n>` for
+  every PR — banner auto-generated as "PR #n: <PR title>", link posted
+  as a PR comment, redeployed on each push; `cleanup-pr-app.yaml`
+  purges the app when the PR closes. So: DO NOT manually deploy
+  production or PR test apps, and do not manually purge PR apps — the
+  workflows do all three (the manual recipe below is for emergencies
+  only). Secrets: `SHINY_TOKEN`/`SHINY_SECRET` (verified 2026-08-19),
+  vars `SHINY_ACCOUNT`/`SHINY_APP_NAME`.
 - No Bioconductor-dependent packages (the shinyapps.io image build breaks
   on them — that is why `metap` was replaced by a local `sumz()`).
 - Keep secrets and per-user data out of `outputComments()` logs and out of
