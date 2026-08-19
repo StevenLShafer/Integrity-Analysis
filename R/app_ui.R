@@ -69,6 +69,27 @@ app_ui <- function(testNote = NULL)
         "the analysis is kept."
         ),
       br(),
+      # The caveat (Steve's wording, 2026-08-19, from his experience as
+      # Editor-in-Chief of Anesthesia & Analgesia): what a flag does and
+      # does not mean, and who is responsible for investigating fraud.
+      # Bold, between the privacy statement and the contact line; the
+      # same note appears in the user guide.
+      h6(
+        strong(HTML(paste(
+          "CAVEAT: Chance alone will produce P &le; 0.05 in 1 in 20",
+          "papers, and P &le; 0.01 in 1 in 100 papers. Research fraud",
+          "should never be alleged by a single manuscript flagged by",
+          "IntegrityAnalysis. Confirmation such as multiple suspicious",
+          "papers (e.g., Fujii, Boldt) should be sought. Authors or",
+          "journal editors should be contacted before any public",
+          "allegations of research fraud. Journals do not have the",
+          "authority, resources, or responsibility for investigating",
+          "fraud. Journal editors should refer allegations of fraud to",
+          "the institution under whose authority the research was",
+          "conducted. Institutions are responsible for ethical conduct",
+          "of research.")))
+        ),
+      br(),
       HTML(
         '<p>
         <h6>Please direct questions and feedback to Steve Shafer at
