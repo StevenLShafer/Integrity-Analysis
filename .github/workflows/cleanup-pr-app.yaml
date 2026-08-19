@@ -1,0 +1,56 @@
+# cleanup-pr-app.yaml - purge IntegrityAnalysis_PR_<n> when its pull
+# request closes, merged or not (deploy trio, part 3).
+#
+# PROVENANCE: written by Claude Code (model Claude Fable 5), 2026-08-19.
+# Automates the "purge test apps after merging" rule from AGENTS.md.
+# terminateApp + purgeApp are wrapped in try(): a PR that never got an
+# app (e.g. its deploy failed, or it predates the trio) must not fail
+# the cleanup.
+
+name: cleanup-pr-app
+
+on:
+  pull_request:
+    types: [closed]
+
+permissions: read-all
+
+jobs:
+  purge:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+
+      - name: Install rsconnect
+        run: Rscript -e 'install.packages("rsconnect")'
+
+      - name: Terminate and purge the PR app
+        env:
+          SHINY_TOKEN: ${{ secrets.SHINY_TOKEN }}
+          SHINY_SECRET: ${{ secrets.SHINY_SECRET }}
+          SHINY_ACCOUNT: ${{ vars.SHINY_ACCOUNT }}
+          SHINY_APP_NAME: ${{ vars.SHINY_APP_NAME }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          Rscript -e '
+            nm <- paste0(Sys.getenv("SHINY_APP_NAME"), "_PR_",
+                         Sys.getenv("PR_NUMBER"))
+            rsconnect::setAccountInfo(
+              name   = Sys.getenv("SHINY_ACCOUNT"),
+              token  = Sys.getenv("SHINY_TOKEN"),
+              secret = Sys.getenv("SHINY_SECRET"))
+            apps <- rsconnect::applications(
+              account = Sys.getenv("SHINY_ACCOUNT"), server = "shinyapps.io")
+            if (!nm %in% apps$name) {
+              cat(nm, "does not exist - nothing to purge\n")
+            } else {
+              try(rsconnect::terminateApp(appName = nm,
+                account = Sys.getenv("SHINY_ACCOUNT"), server = "shinyapps.io"))
+              try(rsconnect::purgeApp(appName = nm,
+                account = Sys.getenv("SHINY_ACCOUNT"), server = "shinyapps.io"))
+              cat(nm, "terminated and purged\n")
+            }'

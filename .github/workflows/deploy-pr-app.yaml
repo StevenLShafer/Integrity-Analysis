@@ -1,0 +1,93 @@
+# deploy-pr-app.yaml - deploy IntegrityAnalysis_PR_<n> automatically
+# for every pull request (deploy trio, part 2).
+#
+# PROVENANCE: written by Claude Code (model Claude Fable 5), 2026-08-19.
+# Automates the PR-app convention from AGENTS.md: every PR gets a test
+# app that IDENTIFIES ITSELF in the UI (Steve's rule, 2026-08-16) - the
+# banner names the PR and its title, so triage never requires opening
+# GitHub. The shim is generated with deparse() so titles containing
+# quotes cannot break out of the R string. Redeploys on every push to
+# the PR branch; the companion cleanup workflow purges the app when the
+# PR closes. Same-repository PRs only (fork PRs get no secrets, by
+# GitHub's own rules - and this repository takes no fork PRs).
+
+name: deploy-pr-app
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: read
+  pull-requests: write   # to post the app link as a PR comment
+
+concurrency:
+  group: pr-app-${{ github.event.pull_request.number }}
+  cancel-in-progress: true   # only the newest push per PR deploys
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      GITHUB_PAT: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+
+      - uses: r-lib/actions/setup-r-dependencies@v2
+        with:
+          extra-packages: any::rsconnect, any::remotes
+
+      - name: Install the PR head from GitHub and deploy the banner app
+        env:
+          SHINY_TOKEN: ${{ secrets.SHINY_TOKEN }}
+          SHINY_SECRET: ${{ secrets.SHINY_SECRET }}
+          SHINY_ACCOUNT: ${{ vars.SHINY_ACCOUNT }}
+          SHINY_APP_NAME: ${{ vars.SHINY_APP_NAME }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          PR_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          Rscript -e '
+            remotes::install_github("StevenLShafer/IntegrityAnalysis",
+                                    ref = Sys.getenv("PR_SHA"),
+                                    upgrade = "never", force = TRUE)
+            note <- paste0("PR #", Sys.getenv("PR_NUMBER"), ": ",
+                           Sys.getenv("PR_TITLE"),
+                           " - see the PR description for what to test.")
+            appDir <- file.path(tempdir(), "prapp")
+            dir.create(appDir)
+            writeLines(sprintf("IntegrityAnalysis::run_app(testNote = %s)",
+                               deparse(note)),
+                       file.path(appDir, "app.R"))
+            rsconnect::setAccountInfo(
+              name   = Sys.getenv("SHINY_ACCOUNT"),
+              token  = Sys.getenv("SHINY_TOKEN"),
+              secret = Sys.getenv("SHINY_SECRET"))
+            rsconnect::deployApp(
+              appDir = appDir,
+              appName = paste0(Sys.getenv("SHINY_APP_NAME"), "_PR_",
+                               Sys.getenv("PR_NUMBER")),
+              appFiles = "app.R",
+              account = Sys.getenv("SHINY_ACCOUNT"),
+              server = "shinyapps.io",
+              forceUpdate = TRUE, launch.browser = FALSE)'
+
+      - name: Post the test-app link on the PR (once)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          SHINY_ACCOUNT: ${{ vars.SHINY_ACCOUNT }}
+          SHINY_APP_NAME: ${{ vars.SHINY_APP_NAME }}
+        run: |
+          url="https://${SHINY_ACCOUNT}.shinyapps.io/${SHINY_APP_NAME}_PR_${PR_NUMBER}/"
+          if ! gh pr view "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" \
+               --json comments -q '.comments[].body' | grep -qF "$url"; then
+            gh pr comment "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" \
+              --body "Test app deployed: $url (banner names this PR; redeployed on every push; purged automatically when the PR closes)"
+          fi
