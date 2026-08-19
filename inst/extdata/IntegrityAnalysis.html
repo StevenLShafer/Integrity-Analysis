@@ -84,8 +84,9 @@ roadmap</a></li>
     "C:\Program Files\Quarto\bin\tools\pandoc.exe" docs/user-guide.md
       -s --embed-resources --toc --metadata title="IntegrityAnalysis"
       -c docs/user-guide.css -o inst/extdata/IntegrityAnalysis.html
-  (one line; see AGENTS.md). The app serves inst/extdata/IntegrityAnalysis.html
-  from the "Download Documentation" button.
+  (one line; see AGENTS.md). The same file is published by
+  .github/workflows/pages.yaml as https://integrityanalysis.io/guide.html,
+  which the app's sidebar "View Documentation" link opens.
 -->
 <p><strong>A Shiny implementation of the Carlisle–Shafer Monte Carlo
 analysis of RCT baseline data.</strong></p>
@@ -519,11 +520,13 @@ size changes.</li>
 the log as it completes. (The user interface is otherwise occupied
 during a long run — live progress display is a known limitation on the
 roadmap.)</p>
-<p><strong>Download Results</strong> — one workbook, three tabs:</p>
-<ul>
-<li><strong>Test Results</strong> — one row per input line plus a
-Summary row per trial, with columns:</li>
-</ul>
+<p><strong>Download Results</strong> — one workbook, three worksheets.
+Together they answer three different questions: what happened line by
+line, what the app believed the data were, and what to report.</p>
+<p><em>Sheet 1, <code>Test Results</code></em> — the audit trail: every
+line the analysis touched, in the order it ran, with a
+<strong>Summary</strong> row closing each trial and a blank row between
+trials.</p>
 <table>
 <colgroup>
 <col style="width: 50%" />
@@ -537,35 +540,59 @@ Summary row per trial, with columns:</li>
 </thead>
 <tbody>
 <tr>
-<td><code>TRIAL</code>, <code>ROW</code></td>
-<td>identify the line</td>
+<td><code>TRIAL</code></td>
+<td>the trial identifier, as it appeared in the grid. Blank on the
+Summary row, which prints beneath its own trial’s rows</td>
+</tr>
+<tr>
+<td><code>ROW</code></td>
+<td>the variable identifier for that line, or <code>Summary</code></td>
 </tr>
 <tr>
 <td><code>P (one-sided toward homogeneity)</code></td>
-<td>the mid-p described above; the Summary row holds the
-Stouffer-combined trial p</td>
+<td>the mid-p described above — small means <em>more homogeneous than
+chance</em>. On the Summary row this is the Stouffer-combined trial
+p</td>
 </tr>
 <tr>
 <td><code>95% Monte Carlo bound</code></td>
-<td>the upper bound (rows with small p) or the Monte Carlo interval
-(trial p below 0.001)</td>
+<td>how precisely the simulation pinned that number: an upper bound on a
+row p too small to resolve, and on the Summary row a bootstrap interval
+for the trial p when it fell below 0.001. Blank when the estimate needs
+no caveat</td>
 </tr>
 <tr>
 <td><code>Replicates</code></td>
-<td>how many simulations that row received (1,000 / 10,000 /
-100,000)</td>
+<td>how many simulations that row actually received (1,000 / 10,000 /
+100,000 — the adaptive scheme stops as soon as the p is resolved, so
+most rows show 1,000)</td>
 </tr>
 </tbody>
 </table>
+<p><em>Sheet 2, <code>Baseline Tables</code></em> — the reconstruction,
+one block per trial stacked down the sheet under a bold
+<code>Trial: &lt;name&gt;</code> heading: variables as rows, arms as
+columns, exactly as a journal prints Table 1.</p>
 <ul>
-<li><strong>Baseline Tables</strong> — the same cells, reorganized as
-each trial’s baseline table would appear in the original article (the
-journal-style reconstruction described below), one table per trial with
-its name above it.</li>
-<li><strong>Summary</strong> — one line per study: the study name, its
-combined P value, and the 95% Monte Carlo interval when one was
-reported.</li>
+<li>Column headers carry each arm’s N (<code>Arm 1 (n = 15)</code>); a
+line whose own N differs — dropouts, missing data — says so in its own
+cell (<code>; n = 14</code>).</li>
+<li>A mean/SD variable prints as <code>mean (SD)</code>; a median/IQR
+variable prints as <code>median [Q1, Q3]</code>; the row label says
+which.</li>
+<li>A categorical variable becomes a heading line (<code>Sex, n</code>)
+with one indented line per category, carrying the counts.</li>
+<li>Every number is formatted at the <strong>printed precision the
+analysis assumed</strong> (the rounding columns), so this sheet is the
+direct comparison against the manuscript page: if it disagrees with the
+page, so did the analysis.</li>
 </ul>
+<p><em>Sheet 3, <code>Summary</code></em> — one line per study, and
+nothing else: the trial name, its combined
+<code>P (one-sided toward homogeneity)</code>, and the
+<code>95% Monte Carlo interval</code> where one was reported. This is
+the sheet to keep when screening many manuscripts — the per-line detail
+stays in sheet 1 for the ones worth a second look.</p>
 <p><strong>Download Table</strong> — the current grid as a spreadsheet.
 This is a valid input file: for a partially extracted PDF it is the
 round trip (fill the gaps in Excel, re-upload), and for hand-typed data
