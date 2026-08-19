@@ -14,3 +14,4 @@ rsconnect/
 .Rproj.user/
 IntegrityAnalysis.Rcheck/
 IntegrityAnalysis_*.tar.gz
+.NewCarlisle/
