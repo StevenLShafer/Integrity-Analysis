@@ -123,13 +123,7 @@ fraud screening during peer review.
 
 ## 2. Point https://integrityanalysis.io at the app
 
-Register/behave so that the domain lands on the shinyapps.io deployment.
-
-Decide whether it should be a redirect or a landing page that explains the
-method, links the Carlisle references, and then hands off to the app — the
-latter is better for an editor arriving from a journal's instructions, and
-gives somewhere to state the data-retention promise before anyone uploads a
-manuscript.
+**Closed 2026-08-19** - see the Closed section at the bottom.
 
 ---
 
@@ -598,6 +592,31 @@ api-spec open decision).
 ---
 
 ## Closed
+
+### 2. Point https://integrityanalysis.io at the app (closed 2026-08-19)
+
+Went with the landing-page design the issue recommended, served by
+GitHub Pages from `site/` in this repository (published by
+`.github/workflows/pages.yaml` on every push to main):
+
+- https://integrityanalysis.io - landing page: the method (screening
+  signal, never a verdict), usage, the data-retention promise stated
+  before anyone uploads, Carlisle 2012/2015/2017 by DOI, Launch buttons.
+- https://integrityanalysis.io/app - stanpumpr.io-pattern full-screen
+  iframe of the shinyapps deployment, keeping the domain in the address
+  bar (shinyapps serves its own HTTPS inside the frame - no plan
+  upgrade needed).
+- https://integrityanalysis.io/guide.html - the user guide, republished
+  from the same file the app serves.
+
+DNS stayed at pairNic (four A records to GitHub Pages IPs + www CNAME
+to stevenlshafer.github.io, replacing the old HTTP-only forwarder).
+Let's Encrypt certificate provisioned by GitHub; HTTPS enforced. When
+certificate provisioning stalls after a DNS change, removing and
+re-adding the Pages custom domain restarts it (it issued within a
+minute of the toggle). Built for inviting journal editors-in-chief
+after John Carlisle's review.
+
 
 ### 4. Build a comprehensive test suite (closed 2026-08-19)
 
