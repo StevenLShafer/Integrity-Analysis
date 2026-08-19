@@ -64,6 +64,39 @@ vague backlog. All three write into the gitignored `.NewCarlisle/`.
    access links and the file name to save under (`PMID_<pmid>.pdf`).
    Re-run it as the census and the downloads progress.
 
+4. **`downloadLicensedOA.R`** - the second and last automated fetch.
+   The census showed a few dozen articles are openly licensed somewhere
+   the PMC pass could never see (a university repository, a publisher's
+   own site), so this re-queries those DOIs, keeps the locations whose
+   OWN license is CC or public domain, and downloads their direct PDFs.
+   **"other-oa" is excluded on purpose**: Unpaywall uses it for "open
+   access, license unstated", which is free to read, not licensed to
+   retrieve. It yielded 3 more papers; 34 of the candidates have no
+   licensed *direct* PDF (landing pages only) and stay in the queue.
+
+5. **`fileDownloads.R`** - the other half of the manual loop. Papers
+   arrive from publishers under names like `NEJMoa063186.pdf` or
+   `1-s2.0-S0007091217363808-main.pdf`, and every one has to become
+   `PMID_<pmid>.pdf`. This identifies each file from its own contents -
+   a DOI in the text, a PMID, the DOI hiding in the file name, or the
+   title matched against the master sheet and confirmed by the volume
+   and page printed on page 1 - then moves it into `.NewCarlisle`.
+   Anything it cannot pin down is left alone and listed; a mis-filed PDF
+   would become a wrong baseline table later, so it never guesses.
+
+**The daily loop**, once the queue exists:
+
+```
+open .NewCarlisle/DownloadPriorityList.xlsx, work down the Queue sheet
+save the PDFs into .NewCarlisle/inbox   (any names; the filer sorts them)
+Rscript corpus/fileDownloads.R          (identify, rename, move)
+Rscript corpus/buildDownloadList.R      (queue shrinks by what you filed)
+```
+
+The filer reads `.NewCarlisle/inbox` and **not** the Downloads folder:
+Steve reviews for many journals, so that folder holds confidential
+manuscripts no script here should be opening.
+
 Steve works down the `Queue` **a handful per day** through Stanford's
 Lane Library. Individual downloads are within Lane's terms; systematic
 bulk retrieval is not, and no script in this repository attempts it.

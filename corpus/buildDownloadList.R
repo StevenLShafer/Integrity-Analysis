@@ -107,9 +107,25 @@ d$License   <- ifelse(is.na(iu), "", up$license[iu])
 d$Free.URL  <- ifelse(is.na(iu), "", up$url[iu])
 d$queried   <- !is.na(iu)
 
+# "Licensed" means a license that grants permission to copy - CC or
+# public domain. Unpaywall's "other-oa" is NOT one: it means "open
+# access, license unstated", which is free to read, not licensed to
+# retrieve. Keep this list identical to corpus/downloadLicensedOA.R,
+# which is what actually fetches these.
+LICENSED <- c("cc0", "public-domain", "cc-by", "cc-by-sa", "cc-by-nc",
+              "cc-by-nc-sa", "cc-by-nd", "cc-by-nc-nd")
+d$Licensed <- sub("-[0-9].*$", "", tolower(d$License)) %in% LICENSED
+
 im <- match(d$PMID, mf$PMID)
 d$PMC.status <- ifelse(is.na(im), "", mf$status[im])
 d$PMC.file   <- ifelse(is.na(im), "", mf$file[im])
+
+# What is actually on disk in .NewCarlisle is the truth about what we
+# have, and it outranks any manifest: the automated passes write their
+# own manifests, but Steve's hand-downloaded papers (filed by
+# corpus/fileDownloads.R) appear only as files. Without this the queue
+# would never shrink as he works it.
+d$Have.new <- file.exists(file.path(outDir, paste0("PMID_", d$PMID, ".pdf")))
 
 ip <- match(d$PMID, pm$PMID)
 d$Local.PDF     <- ifelse(is.na(ip), "", pm$PDF[ip])
@@ -126,17 +142,18 @@ d$Local.exists <- nzchar(d$Local.PDF) &
 # scripted pass may legitimately fetch them - they do not belong in a
 # manual queue.
 d$Status <- ifelse(
-  nzchar(d$Local.PDF), "have PDF (local corpus)",
+  d$Have.new, "have PDF (.NewCarlisle)",
+  ifelse(nzchar(d$Local.PDF), "have PDF (local corpus)",
   ifelse(grepl("^downloaded", d$PMC.status), "have PDF (PMC open access)",
-  ifelse(nzchar(d$License), "auto-eligible: licensed open access",
+  ifelse(d$Licensed, "auto-eligible: licensed open access",
   ifelse(nzchar(d$OA.status) & d$OA.status != "closed",
          "manual: free copy online",
-         "manual: subscription (Lane proxy)"))))
+         "manual: subscription (Lane proxy)")))))
 # Trials the census could not speak to - no DOI in the master sheet, or a
 # DOI not yet queried - are unclassified rather than "subscription"; say
 # so instead of guessing. With the census complete these are exactly the
 # 132 trials that carry no DOI, so the label names that reason.
-unresolved <- !d$queried & !nzchar(d$Local.PDF) &
+unresolved <- !d$queried & !d$Have.new & !nzchar(d$Local.PDF) &
   !grepl("^downloaded", d$PMC.status)
 d$Status[unresolved] <- ifelse(nzchar(d$DOI[unresolved]),
                                "manual: license unknown (not yet queried)",
@@ -255,7 +272,8 @@ notes <- data.frame(Notes = c(
   "",
   "p          = Carlisle's raw one-sided trial p-value; small = baseline",
   "             tables more homogeneous than chance.",
-  "Status     = have PDF (local corpus) / have PDF (PMC open access) /",
+  "Status     = have PDF (.NewCarlisle - downloaded or filed by hand) /",
+  "             have PDF (local corpus) / have PDF (PMC open access) /",
   "             auto-eligible: licensed open access (leave to a script) /",
   "             manual: free copy online / manual: subscription (Lane",
   "             proxy) / manual: no DOI, license never looked up.",
