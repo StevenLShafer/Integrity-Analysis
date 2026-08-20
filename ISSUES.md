@@ -104,10 +104,13 @@ fraud screening during peer review.
 
 ## 3. Validate the analysis against Carlisle's 2017 manuscript
 
-**Status 2026-08-20:** the pilot is done - r = 0.991 against Carlisle's
-values, with the differences explained (his are mid-p, folded at 0.5).
-The FULL run waits on Steve's decision on the tie convention (mid-p vs
-full-tie); the journal-name lookup that joins his sheets is built.
+**Status 2026-08-20, DECISION MADE:** the pilot is done - r = 0.991
+against Carlisle's values, with the differences explained (his are
+mid-p, folded at 0.5). Steve adopted **mid-p for ties** (2026-08-20),
+which is also what the app has computed since the 2026-08-17 one-sided
+implementation - so the app and the comparison now share one
+convention, matching Carlisle's own. The full 5,088-trial run is
+UNBLOCKED; the journal-name lookup that joins his sheets is built.
 
 Reproduce the published results for the 5,087 trials in Carlisle's 2017
 *Anaesthesia* paper from the same inputs, as an end-to-end check on the Monte
@@ -573,6 +576,11 @@ test-distribution-graphs.R.
 
 
 ### 6. One-sided p toward homogeneity (closed 2026-08-20; implemented 2026-08-17)
+
+The issue's one "still to do outside the code" - the PDF documentation
+still describing the old two-column output - was resolved by issue 14:
+the PDF is retired, and docs/user-guide.md documents the single-column
+one-sided p (Steve confirmed complete, 2026-08-20).
 
 The app reports a single one-sided p toward excessive homogeneity - the
 demonstrated fraud signal (Fujii); heterogeneity is deliberately not
