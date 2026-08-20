@@ -6,67 +6,42 @@ the bottom rather than being deleted, so the reasoning survives.
 
 ---
 
-## Where things stand — 2026-08-16
+## Where things stand — 2026-08-20
 
-Handoff from the PDF-parsing session, which ran alongside a separate
-code-review session, so that one new session can pick up both threads.
+The app is a deployed R package with a gated pipeline: every PR runs the
+553-assertion suite plus the security tripwire inside R CMD check, a
+preview app deploys per PR, and production deploys only after the checks
+pass on main, at the exact tested commit (`deploy-production.yaml`,
+2026-08-20). Production: https://steveshafer.shinyapps.io/IntegrityAnalysis/,
+fronted by https://integrityanalysis.io with the user guide at /guide.html.
 
-**Done, in `C:/dev/ParsePDF`** (private, temporary — see issue 9):
+Shipped and closed as issues: one-sided p toward homogeneity with the
+adaptive staged Monte Carlo (6), the ParsePDF fold-in (9), the package
+restructure and deploy trio (10), color-coded grid cells (13), HTML
+documentation (14), the journal-style baseline view (15), and the
+distribution-graphs PowerPoint (16). Beyond the numbered issues: the
+editable grid, multi-file and appending uploads, zipped upload of a
+whole analysis, the purge guarantee, the three-tab results workbook with
+an overall Stouffer P, anonymous usage counting, and a full security
+review (threat model in AGENTS.md "Security"; the adversary is the
+manuscript's author).
 
-- A deterministic parser validated over the **whole** 1,865-article corpus in
-  `C:/temp/journals`. 1,341 articles yield a table; 905 trials produce 12,500
-  continuous rows; 58% of Carlisle's known mean/SD pairs are recovered exactly,
-  with 99.4% agreement on decimal places. ~295 testthat assertions,
-  `R CMD check` clean.
-- Four **font-encoding faults** repaired, each found by reading the corpus
-  character by character. Anesthesiology renders `=` as U+2AFD and `±` as
-  U+2AFE; BJA and EJA render `=` as `¼`; BJA 2003 uses a real `±` where an **en
-  dash** is printed, which was fabricating mean±SD pairs out of dose ranges.
-  Separately, `4,335` was being read as `4.335`.
-- **SD and SE are separate columns**, with `ROUND_DISPERSION`. 229 corpus rows
-  report a standard error; they were previously filed as SDs, which at typical
-  trial sizes is wrong by about a factor of four.
-- AI fallbacks (table page, and article prose) validated live against Carlisle
-  on articles the deterministic engine scores **zero** on: 81% and 91%.
-  **Not enabled in deployment** — see issue 8.
-- OCR for scanned articles; 83 of 99 scanned EJA papers had their PMIDs
-  recovered from the printed citation line, with no network call.
+Corpus work (see corpus/README.md and the memory of the download
+strategy): the Carlisle acquisition pipeline is built - every legal
+automated route is exhausted, and a prioritized manual queue plus a
+filing loop (`.NewCarlisle/inbox` -> fileDownloads.R) is Steve's
+handful-a-day workflow. The Boldt and Fujii fraud corpora are resolved
+to PMIDs with their own worklists; both are 100% manual.
 
-**Deliverables on disk, `C:/temp/ParsePDF_output/`:**
+Open: the API (1), the Carlisle-2017 full validation (3, waiting on the
+tie-convention decision), Monte Carlo optimisation (5, staging landed,
+parallelism remains), the survey of other screens (7), AI parsing in
+deployment (8, direction now publisher-supplied keys), live UI feedback
+during long runs (11), and median/IQR validation (12).
 
-| File | What it is |
-|---|---|
-| `ParsePDF_IntegrityAnalysis.xlsx` | the corpus — 12,500 continuous rows, 905 trials, TRIAL = PMID, current SD/SE schema |
-| `ParsePDF_verified.xlsx` | same data plus per-row verification tags (only 45 trials verified — see below) |
-| `ParsePDF_needs_AI_fallback.csv` | tiered list of what the AI could rescue, with costs |
-| `ParsePDF_for_review.csv` | rows where the two reads disagree |
-| `ParsePDF_discrepancies_for_review.csv` | 171 diagnostic disagreements with Carlisle, for adjudication |
-| `success_by_year.png`, `ParsePDF_success_by_year.csv` | year/journal regression |
-
-**The blind verification pass is DONE (re-run completed 2026-08-16).** The
-first attempt (four concurrent shards) had timed out on 811 of 861 calls; the
-re-run as **two shards with a 900-second per-call timeout** completed with
-**zero timeouts** (confirming the rate-limit diagnosis; total spend for the
-whole effort stayed around the original estimate). Results, merged into
-`C:/temp/ParsePDF_output/` (`ParsePDF_verified.xlsx`,
-`ParsePDF_for_review.csv`):
-
-- 785 of 905 trials produced a comparable blind read (90 pages the model
-  declined as having no baseline table, plus tag collisions account for the
-  rest).
-- **7,560 of 12,500 shipped rows (60.5%) confirmed** by the independent read.
-- **2,778 missing arm Ns filled** under the ≥80%-agreement gate: rows carrying
-  an N rose **from 41.5% to 63.8%**.
-- 3,115 rows written to the review list. The pilot's pattern (disagreements
-  are mostly about *which rows belong*, not about the numbers) has not been
-  re-examined at this scale — adjudicating that list is the natural next step.
-
-**A collision worth learning from.** This session committed to a local
-`fix-r-code-errors` branch without pushing; the review session then merged the
-remote branch and deleted the local one, and the work disappeared. It was
-recovered from the reflog onto the branch `parsepdf-integration`. **In a
-repository two agents share, unpushed work does not exist.**
-
+(The 2026-08-16 ParsePDF handoff that previously stood here - corpus
+verification numbers, deliverables on C:/temp, the unpushed-work lesson -
+is preserved in git history at tag-time of that date.)
 ---
 
 ## 1. Build the API
@@ -128,6 +103,14 @@ fraud screening during peer review.
 ---
 
 ## 3. Validate the analysis against Carlisle's 2017 manuscript
+
+**Status 2026-08-20, DECISION MADE:** the pilot is done - r = 0.991
+against Carlisle's values, with the differences explained (his are
+mid-p, folded at 0.5). Steve adopted **mid-p for ties** (2026-08-20),
+which is also what the app has computed since the 2026-08-17 one-sided
+implementation - so the app and the comparison now share one
+convention, matching Carlisle's own. The full 5,088-trial run is
+UNBLOCKED; the journal-name lookup that joins his sheets is built.
 
 Reproduce the published results for the 5,087 trials in Carlisle's 2017
 *Anaesthesia* paper from the same inputs, as an end-to-end check on the Monte
@@ -210,6 +193,14 @@ ran under), and decide how far to adjudicate the 112 unexplained outliers.
 
 ## 5. Optimise the Monte Carlo
 
+**Status 2026-08-20:** the adaptive staged scheme (1,000 -> 10,000 ->
+100,000 replicates, escalating only while a row alarms) shipped
+2026-08-17 and is the big practical win - typical rows now cost 1,000
+replicates. Chunked simulation bounds memory; dqrng supplies fast
+draws. Remaining: profiling, vectorisation of what is left, and
+trial-level parallelism - which is the same plumbing as issue 11 and
+should be designed with it.
+
 Profile before changing anything, and keep issue 3's validation green
 throughout.
 
@@ -225,51 +216,7 @@ available and is the easiest large win for a whole-corpus run.
 
 ## 6. Change the p-value to one-sided toward homogeneity
 
-Steve's decision (2026-08-16), reversing the earlier agreement with Carlisle.
-The p-value should reflect only the **excessive homogeneity** direction.
-
-**Why:** excessive homogeneity is a demonstrated fraud signal — it is how Fujii
-and others were caught. Excessive heterogeneity is *not* known to indicate
-fabrication. Folding the two treats a real signal and an unproven one as
-equivalent, and it inflates apparent significance for trials whose baseline data
-are merely more variable than chance, which is the direction most likely to
-produce a false accusation.
-
-**Open before implementing:** which tail is "small"? Read literally, "the
-fraction of the Monte Carlo distribution showing less homogeneity" approaches 1
-for suspiciously homogeneous data, inverting the usual convention that a small
-p is the alarming one. The alternative — P = probability of data *at least as
-homogeneous* as observed — keeps small p = concerning. Getting this backwards
-inverts the detector, so confirm the intent, and if the first reading is meant,
-give the output a name other than "p-value" so nobody applies p < 0.05 to it
-reflexively.
-
-**IMPLEMENTED — 2026-08-17 (Steve: proceed).** Decisions, as built:
-
-- **Tail**: P = probability of data *at least as homogeneous* as observed
-  (mid-p) — small p = alarming, the ordinary convention. This is the tail the
-  issue-3 validation already confirmed matches Carlisle's direction, so the
-  continuous branch is **bit-identical** to the validated implementation
-  (verified under fixed seeds); the change is presentational there.
-- **Single column.** The heterogeneity value (old PGE / "Fraction >=") is
-  gone from the output: under mid-p it is exactly 1 − P, so it carried no
-  information, and reporting it invited exactly the false-accusation reading
-  this issue exists to prevent. Results carry TRIAL / ROW / P; the download
-  column is labeled "P (one-sided toward homogeneity)".
-- **Categorical direction FIXED.** `chisq.test`'s simulated p is the *upper*
-  tail — small when arms differ *more* than chance — which pointed the wrong
-  way for fraud detection and was directionally inconsistent with the
-  continuous rows it was Stouffer-combined with (the old folded convention
-  masked this). Categorical rows now simulate contingency tables under the
-  observed margins (`r2dtable`, the same null `chisq.test` uses) and take the
-  *lower* mid-p tail: counts more similar across arms than chance → small p.
-  Direction verified: identical 25/25-vs-25/25 arms give P ≈ 0.08; strongly
-  imbalanced 40/10-vs-10/40 arms give P ≈ 0.999. (Carlisle's corpus is
-  continuous-only, so the issue-3 validation is untouched by this.)
-- Still to do outside the code: the user documentation
-  (`IntegrityAnalysis.pdf`, built from Steve's Word source) still describes
-  the two-column output and needs the corresponding text change.
-
+**Closed 2026-08-20** (implemented 2026-08-17) - see the Closed section.
 ---
 
 ## 7. Survey other open-source research-integrity screens
@@ -324,6 +271,15 @@ adds discrimination, report what merely agrees as corroboration.
 ---
 
 ## 8. A URL keyword that unlocks AI parsing (future)
+
+**Direction update 2026-08-20:** the likelier shape is now
+publisher-supplied API keys (BYOK) - a publisher passes their own
+Anthropic key per request (API) or per call (R package;
+`parseBaselineTableAI(apiKey=)` already accepts one), charges land on
+their account, and supplying the key doubles as informed consent to
+send manuscript text to the model. A URL keyword would bill Steve;
+BYOK bills the beneficiary. Security requirements if built: the key is
+never stored or logged, and dies with the session.
 
 The AI fallback is off in deployment because every call is billed to the
 maintainer. A secret keyword in the URL would let him — and only him — turn it
@@ -409,77 +365,14 @@ writes.
 
 ## 9. Fold ParsePDF into this repository
 
-ParsePDF (`C:/dev/ParsePDF`, private) is a temporary home for the PDF parsing
-work. It will be merged directly into IntegrityAnalysis rather than kept as a
-dependency.
-
-**What comes across**
-
-| | |
-|---|---|
-| Code | 9 flat files in `R/`, no `Collate:`, no load-time dependencies between them |
-| Tests | ~295 testthat assertions, including regression fixtures for every real-corpus defect found so far |
-| Docs | `docs/architecture.md` and `.html`, `AGENTS.md` |
-| Dependencies added | `pdftools`, `httr2`, `jsonlite`; `tesseract` optional, only for scans |
-
-**Why it is easy, and what to preserve**
-
-Every internal function is prefixed `.pp`, so nothing collides with the app's
-own names. The files are self-contained, so the merge is a copy rather than a
-rewrite — most likely sourced from `global.R` alongside the existing code.
-
-Two things are worth deliberately preserving, because they are easy to lose in
-a merge:
-
-- **The test suite.** This repository has none (issue 4), so folding ParsePDF in
-  supplies the parsing half of the one it needs — but only if the tests are
-  carried across and kept runnable. They build their own PDFs with the `pdf()`
-  device, so they need no fixtures beyond `grDevices`.
-- **`R CMD check` discipline.** ParsePDF is a package and is checked clean on
-  every change; a Shiny app is not checked at all. Whatever replaces that — even
-  just running the testthat suite in CI — should be in place before the merge,
-  not after.
-
-**Do this after issue 3** (validation against Carlisle 2017), so the analysis
-side is known-good before the parsing side lands on top of it.
-
-**Status 2026-08-17: DONE (PR pending merge).** Issue 3 validated the
-analysis side (r = 0.991 against Carlisle), then the fold-in landed: the 9
-R files (as 8 parser files + a module doc), the full testthat suite (295
-assertions, passing in the new home), and the architecture docs
-(`docs/parsepdf-architecture.*`). The superseded in-repo
-`parseCovariateTable.R` / `testParseCovariateTable.R` were removed. New
-with the fold-in, at Steve's request: the **parser optimization loop** —
-`corpus/ParseOutcomes.csv` (master sheet: one row per corpus PDF, binary
-parsed/not-parsed outcome, and a comments column giving the steps taken or
-the failure point), `corpus/buildParseOutcomes.R` (resumable regenerator),
-`corpus/README.md`, and an AGENTS.md section addressed directly to the
-LLMs that will revisit the parser every few months. The ParsePDF
-repository is retired (history preserved there).
-
+**Closed 2026-08-20** (merged 2026-08-17, PR #9; the old repository is
+retired) - see the Closed section.
 ---
 
 ## 10. Restructure the repository as an R package (stanpumpR model)
 
-Steve's request (2026-08-16): organize IntegrityAnalysis as a proper package
-repository, using stanpumpR as the example. Full plan, reviewed against the
-actual stanpumpR and ParsePDF layouts, in
-[`docs/package-restructure-plan.md`](docs/package-restructure-plan.md).
-
-In one line per phase: (1) scaffolding — `DESCRIPTION`, `R/app_*.R`,
-`inst/www`, one-line `app.R`, no behavior change; (2) extract `P_Calc()`,
-`sumz()`, validation into documented one-per-file functions; (3) testthat
-suite in-repo (subsumes issue 4's home); (4) ParsePDF fold-in (issue 9)
-lands as package files + tests; (5) GitHub Actions — `R CMD check` on every
-push, then stanpumpR's deploy trio, after which production deploys ship only
-`app.R` and the hand-maintained `appFiles` list (and its
-never-upload-the-Carlisle-data hazard) disappears.
-
-Sequencing: phase 1 any time; phase 2 only after issue 3's validation is
-green, so the refactor has a correctness baseline. renv is deliberately
-deferred (see the plan). License file to be chosen (MIT assumed, matching
-stanpumpR — confirm).
-
+**Closed 2026-08-20** (phase 5, the deploy trio, completed 2026-08-19;
+the deploy gained its test gate 2026-08-20) - see the Closed section.
 ---
 
 ## 11. Live UI feedback while the Monte Carlo runs
@@ -494,8 +387,11 @@ What exists today, and its limits: `shiny::Progress` ticks once per
 flush, which is why it works at all), and `bslib::input_task_button` shows
 a busy state — but within one long trial nothing moves, the comments log
 (`invalidateLater(1000)`) freezes, and nothing can be cancelled. Dean's
-PR #2 (full-page spinner) is another symptom of the same itch; a spinner
-still cannot update *during* the computation.
+PR #2 (full-page spinner, closed 2026-08-20 as superseded) was another
+symptom of the same itch; a spinner still cannot update *during* the
+computation. (2026-08-20: download-side feedback exists - the graphs
+build counts its slides and greys its button - but the ANALYSIS itself
+still only ticks per trial.)
 
 The real fix is to take the computation **off the main thread**:
 
@@ -550,20 +446,9 @@ sensitivity.
 
 ---
 
-## 13. Color-coded grid cells replace the parse-error list (Steve, 2026-08-17)
+## 13. Color-coded grid cells replace the parse-error list
 
-The line-by-line log is unusable for real review. Instead the grid itself
-carries the diagnosis: produce as much of the table as possible (already
-done) and color each problem cell — **yellow = missing** (e.g. no arm N),
-**red = unreadable** (parser saw something it could not turn into a
-number), **blue = incongruent** (e.g. a category value that is not an
-integer). Design: `validateData()` (and the PDF parse step) return a
-per-cell issue map `(row, column, code)` alongside FAIL; the grid renderer
-attaches it to the widget and a custom handsontable renderer paints
-backgrounds; the log remains as the detail view. The same issue taxonomy
-is the API's machine-readable `issues[]` codes (docs/api-spec.md), so app
-and API stay one system.
-
+**Closed 2026-08-20** (implemented 2026-08-18) - see the Closed section.
 ---
 
 ## 14. Documentation moves to HTML
@@ -572,17 +457,9 @@ and API stay one system.
 
 ---
 
-## 15. Journal-style baseline table view for editors (Steve, 2026-08-17)
+## 15. Journal-style baseline table view for editors
 
-The cell-per-line grid looks nothing like a manuscript's Table 1, so an
-editor cannot eyeball what IntegrityAnalysis thought the baseline data
-were. Add a downloadable per-trial **reconstructed baseline table**:
-variables as rows, arms as columns, cells formatted the way journals
-print them — "mean (SD)", "median [Q1, Q3]", "n" for categories — built
-from the validated data. This is the artifact an editor compares against
-the manuscript page. Candidate for the API response too (issue 1 /
-api-spec open decision).
-
+**Closed 2026-08-20** (implemented 2026-08-19) - see the Closed section.
 ---
 
 ## 16. Graphs of actual vs expected squared-error distributions
@@ -696,3 +573,63 @@ Implementation: officer + rvg (both CRAN); the collector hooks
 disturbance); the PowerPoint is built at download time only when the
 box is ticked. R/distributionGraphs.R, tests in
 test-distribution-graphs.R.
+
+
+### 6. One-sided p toward homogeneity (closed 2026-08-20; implemented 2026-08-17)
+
+The issue's one "still to do outside the code" - the PDF documentation
+still describing the old two-column output - was resolved by issue 14:
+the PDF is retired, and docs/user-guide.md documents the single-column
+one-sided p (Steve confirmed complete, 2026-08-20).
+
+The app reports a single one-sided p toward excessive homogeneity - the
+demonstrated fraud signal (Fujii); heterogeneity is deliberately not
+reported. As built: mid-p with the Davison-Hinkley floor per row;
+"<0.0001" shown only when the 97.5% Clopper-Pearson bound licenses it;
+Stouffer across rows, unfloored (accumulation IS the signal), with a
+parametric-bootstrap interval when the trial p < 0.001. Downstream, the
+same convention runs through the Summary sheet's overall P (2026-08-20)
+and the distribution graphs (issue 16). The tie-convention question for
+the Carlisle comparison lives in issue 3.
+
+### 9. ParsePDF folded in (closed 2026-08-20; merged 2026-08-17, PR #9)
+
+The parser lives in R/ as package code (8 parser files + the module
+doc), its 295-assertion suite came with it, and the old private
+repository is retired. Validated at r = 0.991 against Carlisle before
+the move (issue 3 pilot). The corpus tooling (corpus/) and the
+optimization loop (AGENTS.md) operate on it in place; the 2026-08-20
+security review covered it (parses run in a time-limited subprocess;
+poppler never executes document content).
+
+### 10. Package restructure (closed 2026-08-20; phase 5 done 2026-08-19)
+
+All five phases of docs/package-restructure-plan.md are live:
+DESCRIPTION/R-package scaffolding, code moved to R/ with roxygen, the
+testthat suite, R CMD check green in CI, and the deploy trio
+(production deploy, per-PR preview apps, close-time cleanup). Since
+then the pipeline gained the security tripwire (2026-08-20) and the
+deploy now waits mechanically on R-CMD-check success, deploying the
+exact tested SHA.
+
+### 13. Color-coded grid cells (closed 2026-08-20; implemented 2026-08-18)
+
+The grid carries the diagnosis: yellow = missing, red = unreadable
+(parser skip rows keep their reason on hover), blue = incongruent, with
+a legend that appears only when something is flagged. validateData()
+returns the per-cell issue map; a custom handsontable renderer paints
+it (writing via textContent - see the security review). The issue
+taxonomy doubles as the API's machine-readable issues[] codes when
+issue 1 is built. Incomplete parses under-detect (measured 2026-08-18:
+a real alarm diluted from p = 0.014 to 0.099), which is why gaps are
+conspicuous rather than silent.
+
+### 15. Journal-style baseline table view (closed 2026-08-20; implemented 2026-08-19)
+
+buildBaselineTables() reconstructs each trial's Table 1 from the
+VALIDATED data - variables as rows, arms as columns with their Ns,
+"mean (SD)" / "median [Q1, Q3]" / category counts, every value at the
+printed precision the analysis assumed. Available as its own download
+and as the results workbook's middle sheet: if the reconstruction
+disagrees with the manuscript page, so did the analysis. Still a
+candidate for the API response (issue 1).
