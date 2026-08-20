@@ -3,9 +3,19 @@
 #
 # PROVENANCE: written by Claude Code (model Claude Fable 5), 2026-08-19.
 # Automates the "purge test apps after merging" rule from AGENTS.md.
-# terminateApp + purgeApp are wrapped in try(): a PR that never got an
-# app (e.g. its deploy failed, or it predates the trio) must not fail
-# the cleanup.
+#
+# FAIL LOUDLY (2026-08-20, Steve's direction): the original wrapped
+# terminateApp/purgeApp in try() and reported success no matter what.
+# Cleanup fires at merge time - exactly when deploy-production and the
+# pages build are hitting the same shinyapps account - so transient
+# 409 "task in progress" errors were routine, silently swallowed, and
+# seven stale PR apps accumulated before anyone noticed. Same failure
+# shape as the NCBI batch lookups: a swallowed error is
+# indistinguishable from a real result. Now: up to 5 attempts with a
+# 60-second pause (outlasting a typical deploy), and if the app still
+# exists at the end the JOB FAILS, so the leftover shows up in the
+# checks instead of on the shinyapps dashboard months later. A PR that
+# never had an app still passes - "nothing to purge" is a real success.
 
 name: cleanup-pr-app
 
@@ -39,18 +49,40 @@ jobs:
           Rscript -e '
             nm <- paste0(Sys.getenv("SHINY_APP_NAME"), "_PR_",
                          Sys.getenv("PR_NUMBER"))
+            acct <- Sys.getenv("SHINY_ACCOUNT")
             rsconnect::setAccountInfo(
-              name   = Sys.getenv("SHINY_ACCOUNT"),
+              name   = acct,
               token  = Sys.getenv("SHINY_TOKEN"),
               secret = Sys.getenv("SHINY_SECRET"))
-            apps <- rsconnect::applications(
-              account = Sys.getenv("SHINY_ACCOUNT"), server = "shinyapps.io")
-            if (!nm %in% apps$name) {
-              cat(nm, "does not exist - nothing to purge\n")
-            } else {
-              try(rsconnect::terminateApp(appName = nm,
-                account = Sys.getenv("SHINY_ACCOUNT"), server = "shinyapps.io"))
-              try(rsconnect::purgeApp(appName = nm,
-                account = Sys.getenv("SHINY_ACCOUNT"), server = "shinyapps.io"))
-              cat(nm, "terminated and purged\n")
-            }'
+            exists <- function() {
+              apps <- rsconnect::applications(account = acct,
+                                              server = "shinyapps.io")
+              nm %in% apps$name
+            }
+            if (!exists()) {
+              cat(nm, "does not exist - nothing to purge
+")
+              quit(status = 0)
+            }
+            for (attempt in 1:5) {
+              ok <- tryCatch({
+                rsconnect::terminateApp(appName = nm, account = acct,
+                                        server = "shinyapps.io")
+                rsconnect::purgeApp(appName = nm, account = acct,
+                                    server = "shinyapps.io")
+                TRUE
+              }, error = function(e) {
+                cat("attempt", attempt, "failed:", conditionMessage(e), "
+")
+                FALSE
+              })
+              if (ok || !exists()) break
+              Sys.sleep(60)   # outlast the concurrent production deploy
+            }
+            if (exists()) {
+              cat("FAILED:", nm, "still exists after 5 attempts
+")
+              quit(status = 1)
+            }
+            cat(nm, "terminated and purged
+")'
