@@ -39,6 +39,7 @@ suppressPackageStartupMessages({
 
 args <- commandArgs(trailingOnly = TRUE)
 apply_ <- "--apply" %in% args
+fraudOnly <- "--fraud" %in% args
 limit <- NA_integer_
 i <- match("--limit", args)
 if (!is.na(i) && length(args) > i) limit <- as.integer(args[i + 1])
@@ -63,6 +64,7 @@ ref[[1]] <- data.frame(
     if (length(p) >= 3) p[2] else p[which.max(nchar(p))]
   }, character(1)),
   volume = as.character(ms$volume), page = as.character(ms$page),
+  year = as.character(ms$year),
   source = "Carlisle", stringsAsFactors = FALSE)
 
 for (d in c(".Boldt", ".Fujii")) {
@@ -75,7 +77,7 @@ for (d in c(".Boldt", ".Fujii")) {
     PMID = x$PMID,
     journal = x$journal,
     DOI = if ("DOI" %in% names(x)) tolower(x$DOI) else "",
-    title = x$title, volume = x$volume, page = x$page,
+    title = x$title, volume = x$volume, page = x$page, year = x$year,
     source = sub("^[.]", "", d), stringsAsFactors = FALSE)
 }
 ref <- do.call(rbind, ref)
@@ -110,6 +112,10 @@ bagOf <- function(x) {
   w <- strsplit(normWords(x), " ")[[1]]
   unique(w[nchar(w) > 3])
 }
+# A journal locator ("2004;30:416-422"). A "title" that looks like this
+# is not a title at all - it is what a mis-parsed citation leaves behind.
+LOC_RE_REF <- "(19|20)[0-9]{2}[;][^0-9]*[0-9]+[^0-9:]*[:][ ]*[0-9]+"
+
 refBags <- lapply(ref$title, bagOf)
 refCode <- journalCode(ref$journal)
 # A "title" that is really a journal locator, or that reduces to a
@@ -128,6 +134,25 @@ po <- read.csv(file.path(root, "corpus", "ParseOutcomes.csv"),
 pm <- read.csv(mapPath, colClasses = "character")
 todo <- po$PDF[!po$PDF %in% pm$PDF]
 todo <- todo[file.exists(file.path(corpusDir, todo))]
+
+# --fraud narrows this to the question that prompted the exercise - "is
+# a Boldt or Fujii paper already sitting in the corpus unrecognised?" -
+# by keeping only the fraud reference records, and only the files whose
+# journal AND year could possibly hold one. A 379-file sweep becomes a
+# handful, and every match is one that matters.
+if (fraudOnly) {
+  keep <- ref$source != "Carlisle"
+  ref <- ref[keep, ]; refBags <- refBags[keep]
+  refCode <- refCode[keep]; refUsable <- refUsable[keep]
+  byDoi <- ref$PMID[nzchar(ref$DOI)]
+  names(byDoi) <- ref$DOI[nzchar(ref$DOI)]
+  want <- unique(paste(refCode, ref$year))
+  fileKey <- paste(sub("/.*$", "", todo),
+                   sub("^[^/]+/([^/]+)/.*$", "\\1", todo))
+  todo <- todo[fileKey %in% want]
+  cat("fraud-only mode: reference records", nrow(ref),
+      " candidate files", length(todo), "\n")
+}
 if (!is.na(limit)) todo <- head(todo, limit)
 cat("unmapped PDFs to identify:", length(todo), "\n")
 
@@ -136,11 +161,29 @@ inText <- function(v, txt)
   nzchar(v) && !is.na(v) &&
     grepl(paste0("(^|[^0-9])", v, "([^0-9]|$)"), txt)
 
+# Text extraction runs in a SUBPROCESS with a hard timeout. poppler
+# hangs outright on about 2% of real journal PDFs, and a hang inside
+# this loop stalls the whole scan with no way out - which is what
+# happened on the first full run, dead on file 26 of 379.
+# corpus/buildParseOutcomes.R learned the same lesson and says so.
+RSCRIPT <- file.path(R.home("bin"), "Rscript.exe")
+HELPER  <- file.path(root, "corpus", "pdfTextOne.R")
+
+pdfText2 <- function(path, seconds = 25) {
+  tmp <- tempfile(fileext = ".txt")
+  on.exit(unlink(tmp), add = TRUE)
+  ok <- tryCatch(
+    system2(RSCRIPT, c(shQuote(HELPER), shQuote(path), shQuote(tmp), "2"),
+            stdout = FALSE, stderr = FALSE, timeout = seconds),
+    error = function(e) 1L, warning = function(w) 1L)
+  if (!identical(as.integer(ok), 0L) || !file.exists(tmp))
+    return(NA_character_)
+  paste(readLines(tmp, warn = FALSE), collapse = "\n")
+}
+
 identify <- function(path, rel) {
-  txt <- tryCatch({
-    info <- pdf_info(path)
-    paste(pdf_text(path)[seq_len(min(2, info$pages))], collapse = "\n")
-  }, error = function(e) "")
+  txt <- pdfText2(path)
+  if (is.na(txt)) return(list(pmid = "", how = "timed out or unreadable"))
   if (nchar(txt) < 200) return(list(pmid = "", how = "no text layer"))
   dirCode <- sub("/.*$", "", rel)     # the journal this file sits under
 
