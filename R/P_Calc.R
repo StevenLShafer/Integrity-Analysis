@@ -35,19 +35,28 @@
 #' accumulated counts below (`kLess`) and tied with (`kEq`) `statObs`,
 #' and the replicates actually used (`m`).
 #' @noRd
-.stagedTail <- function(simulate, statObs, mMax) {
+.stagedTail <- function(simulate, statObs, mMax, keepDraws = FALSE) {
   stages <- unique(pmin(c(1000, 10000, mMax), mMax))
   kLess <- 0; kEq <- 0; mDone <- 0
+  draws <- NULL
   for (s in stages) {
     n <- s - mDone
     if (n <= 0) next
     sims <- simulate(n)
+    # Distribution graphs (issue 16): keep the FIRST stage's simulated
+    # statistics - they ARE the expected distribution under honest
+    # sampling, generated anyway and normally discarded. 1,000 draws is
+    # plenty for a density picture and costs 8 KB per row. Retention
+    # only: the RNG stream, the counts, and every returned number are
+    # untouched (pinned by the known-answer tests, which now run with
+    # collection on and off).
+    if (keepDraws && mDone == 0) draws <- sims
     kLess <- kLess + sum(sims < statObs)
     kEq   <- kEq   + sum(sims == statObs)
     mDone <- s
     if ((kLess + kEq / 2) / mDone >= 0.01) break
   }
-  list(kLess = kLess, kEq = kEq, m = mDone)
+  list(kLess = kLess, kEq = kEq, m = mDone, draws = draws)
 }
 
 #' One-sided 97.5% Clopper-Pearson upper bound on a Monte Carlo p
@@ -104,8 +113,12 @@
 #'   when P < 0.001), then a "Summary" row with the combined p and its
 #'   bootstrap interval, then a blank spacer row.
 #' @noRd
-P_Calc <- function(TRIAL, DATA, CategoryNames, m)
+P_Calc <- function(TRIAL, DATA, CategoryNames, m, graphs = NULL)
 {
+  # graphs: optional collector environment from newGraphCollector()
+  # (issue 16). When present, each simulated row deposits its observed
+  # statistic and the expected distribution's draws for the PowerPoint
+  # graphs; the returned results are bit-identical either way.
   data <- DATA[DATA$TRIAL == TRIAL,]
   RowIDs <- unique(data$ROW)
 
@@ -182,9 +195,15 @@ P_Calc <- function(TRIAL, DATA, CategoryNames, m)
             }
             out
           }
-          rep <- .rowReport(.stagedTail(simulate, DiffSample, m))
+          sc <- .stagedTail(simulate, DiffSample, m,
+                            keepDraws = !is.null(graphs))
+          rep <- .rowReport(sc)
           Pdisp <- rep$disp; Pci <- rep$ci; Pm <- as.character(rep$m)
           Pnum <- rep$p; PkLE <- rep$kLE
+          if (!is.null(graphs))
+            graphs$rows[[length(graphs$rows) + 1]] <-
+              list(trial = TRIAL, row = Row, kind = "median",
+                   obs = DiffSample, draws = sc$draws, p = rep$p)
           }
           }
         }
@@ -236,9 +255,15 @@ P_Calc <- function(TRIAL, DATA, CategoryNames, m)
             }
             out
           }
-          rep <- .rowReport(.stagedTail(simulate, DiffSample, m))
+          sc <- .stagedTail(simulate, DiffSample, m,
+                            keepDraws = !is.null(graphs))
+          rep <- .rowReport(sc)
           Pdisp <- rep$disp; Pci <- rep$ci; Pm <- as.character(rep$m)
           Pnum <- rep$p; PkLE <- rep$kLE
+          if (!is.null(graphs))
+            graphs$rows[[length(graphs$rows) + 1]] <-
+              list(trial = TRIAL, row = Row, kind = "continuous",
+                   obs = DiffSample, draws = sc$draws, p = rep$p)
         } else {
           # FIX: drop = FALSE added. With a single category column,
           # ROWS[,CategoryNames] dropped to a bare vector and the
@@ -271,9 +296,15 @@ P_Calc <- function(TRIAL, DATA, CategoryNames, m)
           simulate <- function(n)
             vapply(r2dtable(n, rowSums(tab), colSums(tab)),
                    function(s) sum((s - E)^2 / E), numeric(1))
-          rep <- .rowReport(.stagedTail(simulate, statObs, m))
+          sc <- .stagedTail(simulate, statObs, m,
+                            keepDraws = !is.null(graphs))
+          rep <- .rowReport(sc)
           Pdisp <- rep$disp; Pci <- rep$ci; Pm <- as.character(rep$m)
           Pnum <- rep$p; PkLE <- rep$kLE
+          if (!is.null(graphs))
+            graphs$rows[[length(graphs$rows) + 1]] <-
+              list(trial = TRIAL, row = Row, kind = "category",
+                   obs = statObs, draws = sc$draws, p = rep$p)
           }
           }
         }
