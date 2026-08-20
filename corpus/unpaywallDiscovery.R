@@ -20,14 +20,76 @@ suppressPackageStartupMessages({
   library(jsonlite)
 })
 
+args <- commandArgs(trailingOnly = TRUE)
 root <- "C:/dev/IntegrityAnalysis"
-outPath <- file.path(root, ".NewCarlisle", "unpaywall.csv")
-dir.create(dirname(outPath), showWarnings = FALSE)
+absolute <- function(p) if (grepl("^([A-Za-z]:|/)", p)) p else file.path(root, p)
+# Default: the Carlisle lookup, which this script was written for. It
+# takes arguments so the same census can run over the Boldt and Fujii
+# lists (2026-08-19), whose PMIDs corpus/resolveCitationList.R recovers.
+srcArg <- absolute(if (length(args) >= 1) args[1] else
+  "Carlisle PMID to DOI lookup.xlsx")
+outDir <- absolute(if (length(args) >= 2) args[2] else ".NewCarlisle")
+outPath <- file.path(outDir, "unpaywall.csv")
+dir.create(outDir, showWarnings = FALSE)
 
-lookup <- read.xlsx(file.path(root, "Carlisle PMID to DOI lookup.xlsx"))
+lookup <- if (grepl("[.]csv$", srcArg, ignore.case = TRUE))
+  read.csv(srcArg, colClasses = "character") else read.xlsx(srcArg)
+lookup$PMID <- as.character(lookup$PMID)
+lookup <- lookup[!is.na(lookup$PMID) & nzchar(lookup$PMID) &
+                   lookup$PMID != "NA", ]
+
+# Unpaywall is keyed on DOI, and the fraud lists arrive with PMIDs only
+# (their source spreadsheets carry neither). PubMed knows the DOI, so
+# fill the gap here rather than making every caller do it: esummary in
+# batches of 200, one request per second.
+if (!"DOI" %in% names(lookup)) lookup$DOI <- ""
+lookup$DOI <- ifelse(is.na(lookup$DOI), "", lookup$DOI)
+need <- !nzchar(lookup$DOI)
+if (any(need)) {
+  cat("DOIs to look up from PubMed:", sum(need), "\n")
+  ids <- unique(lookup$PMID[need])
+  found <- setNames(rep("", length(ids)), ids)
+  # Batches of 50 with retries, not one big request: a single transient
+  # failure once wiped out an entire 185-PMID batch and the census then
+  # ran on zero DOIs, reporting "nothing open access" for a corpus that
+  # simply had not been looked up. Small batches bound that damage, the
+  # retry usually removes it, and a batch that still fails says so.
+  failed <- 0
+  for (ch in split(ids, ceiling(seq_along(ids) / 50))) {
+    u <- paste0("https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esummary.fcgi",
+                "?db=pubmed&retmode=json&tool=IntegrityAnalysis",
+                "&email=steven.shafer%40stanford.edu&id=",
+                paste(ch, collapse = ","))
+    j <- NULL
+    for (attempt in 1:3) {
+      j <- tryCatch(fromJSON(u, simplifyVector = FALSE),
+                    error = function(e) NULL)
+      if (!is.null(j) && !is.null(j$result)) break
+      Sys.sleep(2)
+    }
+    if (is.null(j) || is.null(j$result)) {
+      failed <- failed + length(ch)
+      cat("  !! esummary failed for a batch of", length(ch), "PMIDs\n")
+      next
+    }
+    for (id in ch) {
+      r <- j$result[[id]]
+      if (is.null(r) || is.null(r$articleids)) next
+      for (a in r$articleids)
+        if (identical(a$idtype, "doi")) found[[id]] <- a$value
+    }
+    cat("  DOIs found so far:", sum(nzchar(found)), "/", length(ids), "\n")
+    Sys.sleep(1)
+  }
+  if (failed > 0)
+    cat("WARNING:", failed, "PMIDs could not be looked up - rerun to retry\n")
+  lookup$DOI[need] <- found[lookup$PMID[need]]
+}
+
 lookup <- lookup[!is.na(lookup$DOI) & nzchar(lookup$DOI), ]
 lookup <- lookup[!duplicated(lookup$DOI), ]
-cat("DOIs to query:", nrow(lookup), "\n")
+cat("Source:", srcArg, "\nOutput:", outPath,
+    "\nDOIs to query:", nrow(lookup), "\n")
 
 done <- if (file.exists(outPath)) {
   read.csv(outPath, colClasses = "character")
