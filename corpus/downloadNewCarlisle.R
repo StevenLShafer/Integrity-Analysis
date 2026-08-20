@@ -172,6 +172,13 @@ extractPdfFromTgz <- function(tgz, dest) {
   exd <- tempfile(); dir.create(exd)
   files <- tryCatch(untar(tgz, list = TRUE),
                     error = function(e) character(0))
+  # SECURITY (2026-08-20 review): refuse entries that could write outside
+  # exd - "../evil.pdf" or an absolute path passes the .pdf filter and
+  # untar() follows it. PMC is a trusted source, but the check costs one
+  # line and a poisoned archive is exactly the sort of thing a
+  # fraud-detection tool should expect.
+  files <- files[!grepl("^([/\\\\]|[A-Za-z]:)", files) &
+                   !grepl("(^|[/\\\\])[.][.]([/\\\\]|$)", files)]
   pdfs <- files[grepl("\\.pdf$", files, ignore.case = TRUE)]
   if (length(pdfs) == 0) { unlink(c(tgz, exd), recursive = TRUE)
                            return(NA_character_) }
