@@ -600,6 +600,22 @@ Steve's spec:
   plus a pooled slide), generated on demand;
 - delivered as an additional file in the **Download Results** flow.
 
+Granularity (Steve's question, discussion 2026-08-20): a distribution
+needs many draws, so the three levels differ in kind -
+- **overall**: observed vs expected distribution of the TRIAL p-values
+  (the Carlisle Fujii figure; the case-making slide);
+- **per trial**: the trial's combined statistic against its Monte Carlo
+  distribution, observed marked, row p-values listed;
+- **per row**: a single row has ONE observed value, so its slide shows
+  the EXPECTED distribution with a line where the observed squared
+  error landed - a graphical p-value, and the exhibit to put in front
+  of an author for a specific variable. Volume is the hazard (10
+  variables x 30 trials = 300 slides), so per-row slides only for rows
+  under a cutoff (default p < 0.01, adjustable) - the deck should end
+  with the smoking guns, not bury them.
+Columns (arms) are not a graphing unit: the statistic lives on rows,
+and a row's slide shows all its arms together.
+
 Notes for the implementer: the Monte Carlo engine already simulates the
 expected distribution as a by-product of computing each row's p - the
 work is capturing it rather than discarding it, then rendering. The
