@@ -24,18 +24,21 @@ Imports:
   httr2,
   jsonlite,
   MBESS,
+  officer,
   openxlsx,
   pdftools,
   readxl,
   Rfast,
   rhandsontable,
+  rvg,
   shiny,
   shinydashboard,
   shinyjs,
   shinyWidgets,
   stats,
   tools,
-  utils
+  utils,
+  zip
 Suggests:
     graphics,
     grDevices,
@@ -54,6 +57,7 @@ Collate:
   zipUpload.R
   P_Calc.R
   baselineTable.R
+  distributionGraphs.R
   usageCount.R
   app_ui.R
   app_server.R

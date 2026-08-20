@@ -372,7 +372,10 @@ roadmap.)
 
 **Download Results** — one workbook, three worksheets. Together they
 answer three different questions: what happened line by line, what the
-app believed the data were, and what to report.
+app believed the data were, and what to report. Ticking **Graph
+results** before downloading adds a PowerPoint of actual-vs-expected
+distribution graphs, and the download becomes a zip holding both files
+(described after the worksheets below).
 
 *Sheet 1, `Test Results`* — the audit trail: every line the analysis
 touched, in the order it ran, with a **Summary** row closing each trial
@@ -416,6 +419,31 @@ visible. Trials whose P could not be computed (`No values`) are left
 out, and the row's label says how many combined. This is the sheet to
 keep when screening many manuscripts — the per-line detail stays in
 sheet 1 for the ones worth a second look.
+
+**Graph results — the PowerPoint of distributions.** Tick the box next
+to Download Results (before or after the analysis — it only changes
+what the download builds) and the download delivers a zip: the workbook
+above plus `Integrity Analysis Graphs.pptx`. The deck shows the
+analysis the way Carlisle's 2012 Fujii paper did
+([PMID 22404311](https://pubmed.ncbi.nlm.nih.gov/22404311/)) — you see
+the data hugging the mean more tightly than chance allows, instead of
+taking a p-value's word for it:
+
+- **All trials** (when there are two or more): the observed cumulative
+  distribution of the trial p-values against the diagonal expected
+  under honest sampling, annotated with the overall Stouffer P.
+- **One slide per trial**: the same picture within the trial, over its
+  baseline variables.
+- **One slide per suspicious variable** (p ≤ 0.01): the expected
+  distribution of the squared-error statistic — the Monte Carlo draws
+  the analysis generated anyway — with a red line where the observed
+  value landed. A graphical p-value: the exhibit to put in front of an
+  author about a specific variable. Only flagged variables get slides,
+  so the deck ends with the evidence rather than burying it.
+
+Every graph is inserted as native, editable PowerPoint drawing objects
+— axes, bars, and labels can be restyled in PowerPoint for a
+presentation or a report figure.
 
 **Download Table** — the current grid as a spreadsheet. This is a valid
 input file: for a partially extracted PDF it is the round trip (fill the

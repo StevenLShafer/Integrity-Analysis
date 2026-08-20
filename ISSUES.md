@@ -585,45 +585,9 @@ api-spec open decision).
 
 ---
 
-## 16. Graphs of actual vs expected squared-error distributions (Steve, 2026-08-20)
+## 16. Graphs of actual vs expected squared-error distributions
 
-An option to generate the graphs Carlisle used in the 2012 Fujii
-analysis (PMID 22404311): for each trial - and pooled - the observed
-distribution of a homogeneity statistic plotted against its expected
-distribution under honest sampling, so a reader SEES the baseline data
-hugging the mean more tightly than chance allows, rather than taking a
-p-value's word for it.
-
-Steve's spec:
-- the statistic is the squared error, as in Carlisle's figures;
-- output is a **PowerPoint file** (one slide per trial, presumably,
-  plus a pooled slide), generated on demand;
-- delivered as an additional file in the **Download Results** flow.
-
-Granularity (Steve's question, discussion 2026-08-20): a distribution
-needs many draws, so the three levels differ in kind -
-- **overall**: observed vs expected distribution of the TRIAL p-values
-  (the Carlisle Fujii figure; the case-making slide);
-- **per trial**: the trial's combined statistic against its Monte Carlo
-  distribution, observed marked, row p-values listed;
-- **per row**: a single row has ONE observed value, so its slide shows
-  the EXPECTED distribution with a line where the observed squared
-  error landed - a graphical p-value, and the exhibit to put in front
-  of an author for a specific variable. Volume is the hazard (10
-  variables x 30 trials = 300 slides), so per-row slides only for rows
-  under a cutoff (default p < 0.01, adjustable) - the deck should end
-  with the smoking guns, not bury them.
-Columns (arms) are not a graphing unit: the statistic lives on rows,
-and a row's slide shows all its arms together.
-
-Notes for the implementer: the Monte Carlo engine already simulates the
-expected distribution as a by-product of computing each row's p - the
-work is capturing it rather than discarding it, then rendering. The
-`officer` package writes .pptx natively from R (no Office needed on the
-server); plots via base graphics or ggplot2 into the slides. Download
-Results currently returns one xlsx; adding a second downloadable
-artifact needs either a second button or a zip of the two - Steve's
-call when this is built.
+**Closed 2026-08-20** - see the Closed section at the bottom.
 
 ---
 
@@ -701,3 +665,34 @@ which now describes all three worksheets of the results workbook - the
 `Test Results` audit trail column by column, the `Baseline Tables`
 reconstruction and its formatting rules, and the one-line-per-study
 `Summary` - rather than listing the tabs.
+
+
+### 16. Graphs of actual vs expected squared-error distributions (closed 2026-08-20)
+
+Built the day it was filed. A **Graph results** checkbox sits beside
+Download Results; ticked, the download becomes a zip of the workbook
+plus `Integrity Analysis Graphs.pptx`. The deck follows the granularity
+settled that morning: an all-trials slide (observed cumulative
+distribution of trial p-values against the uniform diagonal - the
+Carlisle 2012 Fujii figure), one slide per trial over its variables,
+and one slide per variable with p <= 0.01 showing the expected
+distribution of the squared-error statistic with the observed value
+marked in red - the Monte Carlo draws the engine had always generated
+and discarded, now kept by a collector that leaves the returned results
+bit-identical (pinned by test).
+
+Steve's Excel-tabs alternative was considered and declined: native
+Excel charts cannot express these figures (an ECDF against a diagonal,
+a density with an observed marker), metafile paste is a Windows-only
+idiom and the server is Linux, and images in worksheet tabs neither
+scale nor print. The metafile INSTINCT - editable vector graphics - is
+delivered better in the deck itself: rvg inserts every graph as native
+PowerPoint drawing objects, so axes, bars, and labels can be restyled
+by hand. Slides are also simply the right habitat for what these are:
+exhibits, shown to editors and integrity committees.
+
+Implementation: officer + rvg (both CRAN); the collector hooks
+.stagedTail's first stage (1,000 draws, 8 KB per row, zero RNG
+disturbance); the PowerPoint is built at download time only when the
+box is ticked. R/distributionGraphs.R, tests in
+test-distribution-graphs.R.

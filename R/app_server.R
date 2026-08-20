@@ -51,6 +51,8 @@ app_server <- function(input, output, session) {
   # assignments below now bind to these because server() is the nearest
   # enclosing environment.
   OUTPUT <- NULL         # accumulated results across trials, for download
+  graphsData <- NULL     # per-row Monte Carlo draws for the issue-16
+                         # graphs; refilled by every Analyze run
   DATA <- NULL           # validated data table for the current upload
   TRIALS <- NULL         # unique trial identifiers in DATA
   ColumnNames <- NULL    # cleaned-up column names of DATA
@@ -502,6 +504,12 @@ app_server <- function(input, output, session) {
       # session appended new results to the old ones in the downloaded
       # spreadsheet.
       OUTPUT <<- NULL
+      # Distribution graphs (issue 16): a fresh collector per run; each
+      # simulated row deposits its expected-distribution draws here.
+      # Collection always runs (8 KB per row); the PowerPoint itself is
+      # built only at download time, and only when the "Graph results"
+      # box is checked - so the box can be ticked AFTER the analysis.
+      graphsData <<- newGraphCollector()
       start_time <- Sys.time()
       # (Progress message wording below taken from the 2025-09-01 local copy
       # on g:, which post-dated the GitHub upload.)
@@ -515,7 +523,7 @@ app_server <- function(input, output, session) {
         TRIAL <- TRIALS[i]
         OUTPUT <<- rbind(
           OUTPUT,
-          P_Calc(TRIAL, DATA, CategoryNames, m)
+          P_Calc(TRIAL, DATA, CategoryNames, m, graphs = graphsData)
         )
         progress$set(
           value = i / LengthTrials,
@@ -875,7 +883,16 @@ app_server <- function(input, output, session) {
         output$downloadButton <- NULL
       } else {
         output$downloadButton <- renderUI({
-          downloadButton("download", "Download Results")
+          tagList(
+            # Issue 16 (Steve's design, 2026-08-20): PowerPoint graphs
+            # are prepared only when asked for. Checked -> Download
+            # Results delivers a zip (workbook + Graphs.pptx);
+            # unchecked -> the bare xlsx, exactly as before.
+            checkboxInput("graphResults",
+                          "Graph results (adds a PowerPoint of actual vs expected distributions)",
+                          value = FALSE, width = "100%"),
+            downloadButton("download", "Download Results")
+          )
           })
       }
     }
@@ -883,7 +900,9 @@ app_server <- function(input, output, session) {
 
   output$download <- downloadHandler(
     filename = function() {
-      paste0("Integrity Analysis.",format(Sys.time(), format = "%y%m%d-%H%M%S"), ".xlsx")
+      paste0("Integrity Analysis.",
+             format(Sys.time(), format = "%y%m%d-%H%M%S"),
+             if (isTRUE(input$graphResults)) ".zip" else ".xlsx")
     },
     content = function(file) {
       # Three tabs (Steve's design, 2026-08-19): Test Results (the sheet
@@ -891,8 +910,26 @@ app_server <- function(input, output, session) {
       # reconstructions of what was analyzed), Summary (one line per
       # study: name, combined P, Monte Carlo interval). Writer in
       # R/baselineTable.R.
+      if (!isTRUE(input$graphResults)) {
+        writeResultsWorkbook(OUTPUT, reactiveDataValidated(),
+                             CategoryNames, file)
+        return(invisible(NULL))
+      }
+      # Graph results checked (issue 16): the same workbook plus the
+      # PowerPoint of actual-vs-expected distributions, zipped. Both are
+      # staged under tempdir() (purged with the session); zip::zip with
+      # root keeps the archive flat.
+      stage <- file.path(tempdir(),
+                         paste0("dl", format(Sys.time(), "%H%M%OS3")))
+      dir.create(stage)
+      on.exit(unlink(stage, recursive = TRUE), add = TRUE)
+      xf <- file.path(stage, "Integrity Analysis Results.xlsx")
+      pf <- file.path(stage, "Integrity Analysis Graphs.pptx")
       writeResultsWorkbook(OUTPUT, reactiveDataValidated(),
-                           CategoryNames, file)
+                           CategoryNames, xf)
+      writeGraphsPptx(OUTPUT, graphsData, pf)
+      zip::zip(file, files = basename(c(xf, pf)), root = stage,
+               mode = "cherry-pick")
     })
 
   # Download the current table (generalized 2026-08-17 from the single-PDF
