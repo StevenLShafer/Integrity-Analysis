@@ -1,5 +1,14 @@
-# deploy-production.yaml - redeploy the production app on every push to
-# main (package-restructure plan, phase 5: the deploy trio, part 1).
+# deploy-production.yaml - redeploy the production app after the checks
+# pass on main (package-restructure plan, phase 5: the deploy trio,
+# part 1).
+#
+# GATING (2026-08-20, Steve's request): this workflow triggers on the
+# COMPLETION of R-CMD-check for a main-branch commit, and the job runs
+# only when that check SUCCEEDED - so "the 553-assertion suite passed
+# before every deploy" is a mechanism, not a convention. Previously it
+# triggered on push and ran in parallel with the tests; a direct push
+# to main with failing tests would have deployed. workflow_dispatch
+# remains for a manual redeploy of whatever main currently holds.
 #
 # PROVENANCE: written by Claude Code (model Claude Fable 5), 2026-08-19,
 # adapted from the stanpumpR deploy pattern and the manual recipe in
@@ -12,8 +21,11 @@
 name: deploy-production
 
 on:
-  push:
+  workflow_run:
+    workflows: ["R-CMD-check"]
+    types: [completed]
     branches: [main]
+  workflow_dispatch:
 
 permissions: read-all
 
@@ -24,12 +36,20 @@ concurrency:
 
 jobs:
   deploy:
+    # workflow_run fires on failure too; deploy only on success (a
+    # manual dispatch carries no workflow_run payload and always runs)
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
     runs-on: ubuntu-latest
     timeout-minutes: 120
     env:
       GITHUB_PAT: ${{ secrets.GITHUB_TOKEN }}
+      # the exact commit the tests passed on - checked out AND deployed,
+      # so the two can never diverge
+      DEPLOY_SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.DEPLOY_SHA }}
 
       # SECURITY GATE (2026-08-20, Steve's requirement): nothing deploys
       # without passing the static tripwire - see tools/securityCheck.R
@@ -62,7 +82,7 @@ jobs:
             # default per-request timeout while the client polls the build
             options(rsconnect.http.timeout = 900)
             remotes::install_github("StevenLShafer/IntegrityAnalysis",
-                                    ref = Sys.getenv("GITHUB_SHA"),
+                                    ref = Sys.getenv("DEPLOY_SHA"),
                                     upgrade = "never", force = TRUE)
             rsconnect::setAccountInfo(
               name   = Sys.getenv("SHINY_ACCOUNT"),
@@ -75,4 +95,4 @@ jobs:
               account = Sys.getenv("SHINY_ACCOUNT"),
               server = "shinyapps.io",
               forceUpdate = TRUE, launch.browser = FALSE)
-            cat("production deployed at", Sys.getenv("GITHUB_SHA"), "\n")'
+            cat("production deployed at", Sys.getenv("DEPLOY_SHA"), "\n")'
