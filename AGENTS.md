@@ -103,6 +103,38 @@ parsing challenge: `corpus/` (see its README).
   one-row data.frame carrying `datapath`, and read `<<-`-mutated state via
   `session$env$...` (the test block only sees a clone).
 
+## renv - the pinned environment
+
+Adopted 2026-08-20 (Steve's decision). `renv.lock` is the single source
+of truth for R (4.5.3) and every package version, because this tool's
+verdicts must be reproducible: an integrity finding may be challenged,
+and "the exact computational environment is on record" is part of the
+defense. The known-answer tests pin the Monte Carlo values themselves;
+the lockfile pins everything those values depend on.
+
+- **Local**: the project `.Rprofile` auto-activates renv. After pulling
+  a lockfile change, run `renv::restore()`. After adding a dependency
+  (DESCRIPTION first - Imports or Suggests - then `renv::install()`),
+  run `renv::snapshot()` and commit `renv.lock` in the same PR. The
+  snapshot type is **explicit**: DESCRIPTION's runtime declarations
+  (Imports, recursively) are recorded and nothing else. Dev tooling
+  (testthat, rcmdcheck, rsconnect, remotes) deliberately FLOATS - its
+  versions cannot affect the statistical results, and pinning it would
+  drag hundreds of transitive suggests into the lockfile.
+- **CI and deploys** restore from the lockfile
+  (`r-lib/actions/setup-renv@v2` in `R-CMD-check.yaml`,
+  `deploy-production.yaml`, `deploy-pr-app.yaml`), so the runner's
+  library - and therefore the versions rsconnect writes into the
+  manifest and shinyapps.io installs - are the locked ones.
+- **Floating breakage is discovered on a schedule, not in an
+  emergency**: `cran-canary.yaml` runs the full check every Monday
+  against R "release" and latest CRAN. A red canary blocks nothing; it
+  means "plan a lockfile refresh".
+- **Refresh policy**: deliberately, roughly monthly or when the canary
+  goes red - `renv::update()`, run the full suite (the known-answer
+  tests are the arbiter; if an upgrade moves the pinned Monte Carlo
+  values, re-pin them and say so in the commit), snapshot, PR.
+
 ## Security
 
 Security must be assured before anything deploys (Steve's requirement,

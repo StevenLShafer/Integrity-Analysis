@@ -92,7 +92,23 @@ parseBaselineTableFiles <- function(files,
         " article(s) may be sent to the Claude API, one call each.")
 
   optsRds <- tempfile(fileext = ".rds")
+  # devPath (2026-08-20, found by the renv adoption): when this parent
+  # is a pkgload dev tree (load_all during development and testing),
+  # tell the child to load THE SAME WORKING TREE. The child used to
+  # library(IntegrityAnalysis) unconditionally, which under load_all
+  # silently resolved to whatever stale INSTALLED copy the library
+  # happened to hold - local subprocess tests were exercising the
+  # last-installed parser, not the code under test. renv's isolated
+  # library had no installed copy at all, which is how this surfaced.
+  # In installed contexts (R CMD check, shinyapps.io) devPath is NULL
+  # and the child loads the installed package exactly as before.
+  devPath <- tryCatch(
+    if (requireNamespace("pkgload", quietly = TRUE) &&
+        pkgload::is_dev_package("IntegrityAnalysis"))
+      pkgload::pkg_path() else NULL,
+    error = function(e) NULL)
   saveRDS(list(libPaths = .libPaths(),
+               devPath  = devPath,
                args     = c(list(ai = ai), list(...))), optsRds)
   on.exit(unlink(optsRds), add = TRUE)
 

@@ -1,0 +1,51 @@
+# cran-canary.yaml - weekly check against LATEST CRAN and current R.
+#
+# PROVENANCE: written by Claude Code (model Claude Opus 5), 2026-08-20,
+# with the renv adoption. The pinned lockfile (renv.lock) is what CI
+# and production actually use; its cost is that upstream breakage stays
+# invisible until a lockfile refresh. This canary pays that cost back:
+# once a week it runs the full R CMD check with FLOATING versions -
+# R "release" and whatever CRAN serves today - so a breaking release in
+# any of the ~100 transitive dependencies is discovered as a red
+# scheduled run, on a quiet day, instead of during an emergency deploy.
+# A canary failure does NOT block anything; it is information. The fix
+# is usually a deliberate lockfile refresh (see AGENTS.md "renv").
+
+name: cran-canary
+
+on:
+  schedule:
+    - cron: "17 6 * * 1"   # Mondays 06:17 UTC - quiet, and off the hour
+  workflow_dispatch:
+
+permissions: read-all
+
+jobs:
+  canary:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      GITHUB_PAT: ${{ secrets.GITHUB_TOKEN }}
+      R_KEEP_PKG_SOURCE: yes
+      RENV_CONFIG_AUTOLOADER_ENABLED: "false"   # float, ignore the lockfile
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: r-lib/actions/setup-pandoc@v2
+
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+
+      - uses: r-lib/actions/setup-r-dependencies@v2
+        with:
+          extra-packages: any::rcmdcheck
+          needs: check
+
+      - uses: r-lib/actions/check-r-package@v2
+        with:
+          args: 'c("--no-manual", "--as-cran")'
+          # same tolerance as R-CMD-check.yaml: fail on ERRORs, tolerate
+          # the documented library() WARNING from run_app()
+          error-on: '"error"'
