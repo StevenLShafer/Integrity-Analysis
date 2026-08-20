@@ -180,7 +180,9 @@ writeBaselineTablesXlsx <- function(tables, file) {
 #'     header above each.
 #'   \item \strong{Summary}: one line per study - the study name, its
 #'     combined P value, and the Monte Carlo interval when one was
-#'     reported.
+#'     reported - closed by an overall Stouffer combination across all
+#'     trials with a numeric p (2+ trials only), the step Carlisle used
+#'     to reach a single p for all of Fujii's trials (PMID 22404311).
 #' }
 #'
 #' @param results the accumulated raw results (columns TRIAL, ROW, P,
@@ -239,10 +241,41 @@ writeResultsWorkbook <- function(results, validated, categoryNames,
         stringsAsFactors = FALSE)
   }
   s <- do.call(rbind, rows)
+
+  # Overall P across trials (Steve's request, 2026-08-20): the same
+  # Stouffer combination the app already applies WITHIN a trial, applied
+  # to the trial p-values - exactly the step Carlisle took to reach a
+  # single p for all of Fujii's trials in the 2012 analysis
+  # (PMID 22404311). Unweighted, matching the within-trial combination
+  # and Carlisle's usage; one-sidedness carries through, so a small
+  # overall P still reads "baseline data across these trials are more
+  # homogeneous than honest sampling allows".
+  #
+  # Only trials whose p is a number can combine - a trial that reported
+  # "No values" is left out, and the row says how many combined. Edge
+  # case: a trial p of exactly 0 or 1 maps to an infinite z; one sign of
+  # infinity dominates legitimately, but both at once is 0/0 - reported
+  # as not computable rather than silently dropped.
+  pAll <- suppressWarnings(as.numeric(s$P))
+  ok <- !is.na(pAll)
+  if (sum(ok) > 1) {
+    overall <- sumz(pAll[ok])$p
+    s <- rbind(s, data.frame(
+      TRIAL = paste0("ALL ", sum(ok), " TRIAL",
+                     if (sum(ok) > 1) "S" else "",
+                     " (Stouffer combination)"),
+      P = if (is.nan(overall)) "not computable (trial p of exactly 0 and 1 both present)"
+          else as.character(signif(overall, 4)),
+      CI = "", stringsAsFactors = FALSE))
+  }
+
   names(s) <- c("TRIAL", "P (one-sided toward homogeneity)",
                 "95% Monte Carlo interval")
   openxlsx::addWorksheet(wb, "Summary")
   openxlsx::writeData(wb, "Summary", s, headerStyle = headStyle)
+  if (sum(ok) > 1)
+    openxlsx::addStyle(wb, "Summary", boldStyle, rows = nrow(s) + 1,
+                       cols = seq_along(s), gridExpand = TRUE, stack = TRUE)
   openxlsx::setColWidths(wb, "Summary", cols = seq_along(s),
                          widths = "auto")
 

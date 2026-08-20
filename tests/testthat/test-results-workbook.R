@@ -50,11 +50,31 @@ test_that("the results download carries all three tabs, correctly filled", {
   expect_true("45.3 (12.1)" %in% flat)
   expect_true("Sex, n" %in% flat)
 
-  # tab 3: one line per study - name, P, interval column
+  # tab 3: one line per study, closed by the overall Stouffer row
+  # (Steve's request, 2026-08-20 - the Carlisle-on-Fujii step)
   t3 <- openxlsx::read.xlsx(f, sheet = "Summary")
-  expect_identical(nrow(t3), 2L)
-  expect_identical(t3$TRIAL, c("A", "B"))
+  expect_identical(nrow(t3), 3L)
+  expect_identical(t3$TRIAL[1:2], c("A", "B"))
+  expect_match(t3$TRIAL[3], "^ALL 2 TRIALS [(]Stouffer")
   p <- suppressWarnings(as.numeric(t3[[2]]))
   expect_true(all(!is.na(p)) && all(p > 0 & p < 1))
+  # the overall row IS the Stouffer combination of the trial rows
+  expect_equal(p[3], signif(sumz(p[1:2])$p, 4), tolerance = 1e-3)
   expect_identical(names(t3)[3], "95%.Monte.Carlo.interval")
+})
+
+test_that("a single trial gets no overall row", {
+  d <- data.frame(
+    TRIAL = "A", ROW = c("Age", "Age"), N = c(15, 17),
+    MEAN = c(45.3, 46.1), SD = c(12.1, 11.8),
+    ROUND_MEAN = 1, ROUND_OBSERVATION = 1, stringsAsFactors = FALSE)
+  v <- shiny::isolate(validateData(d))
+  dqrng::dqset.seed(7); set.seed(7)
+  OUTPUT <- suppressWarnings(shiny::isolate(
+    P_Calc("A", v$DATA, v$CategoryNames, 1000)))
+  f <- tempfile(fileext = ".xlsx")
+  writeResultsWorkbook(OUTPUT, v$DATA, v$CategoryNames, f)
+  t3 <- openxlsx::read.xlsx(f, sheet = "Summary")
+  expect_identical(nrow(t3), 1L)
+  expect_false(any(grepl("ALL", t3$TRIAL)))
 })

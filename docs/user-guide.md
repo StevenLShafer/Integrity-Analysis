@@ -389,9 +389,18 @@ as rows, arms as columns, exactly as a journal prints Table 1.
   comparison against the manuscript page: if it disagrees with the page,
   so did the analysis.
 
-*Sheet 3, `Summary`* — one line per study, and nothing else: the trial
-name, its combined `P (one-sided toward homogeneity)`, and the
-`95% Monte Carlo interval` where one was reported. This is the sheet to
+*Sheet 3, `Summary`* — one line per study: the trial name, its combined
+`P (one-sided toward homogeneity)`, and the `95% Monte Carlo interval`
+where one was reported. When the analysis holds **two or more trials**,
+a closing bold row gives the **overall P for the entire analysis** — the
+same Stouffer (sum-of-z) combination the app applies within each trial,
+now applied across the trial P values. This is the step Carlisle took to
+reach a single p for the whole body of Fujii's work
+([PMID 22404311](https://pubmed.ncbi.nlm.nih.gov/22404311/)): each trial
+may look only mildly improbable, but improbability *accumulates*, and
+the overall P is where a pattern across an author's trials becomes
+visible. Trials whose P could not be computed (`No values`) are left
+out, and the row's label says how many combined. This is the sheet to
 keep when screening many manuscripts — the per-line detail stays in
 sheet 1 for the ones worth a second look.
 
