@@ -585,6 +585,32 @@ api-spec open decision).
 
 ---
 
+## 16. Graphs of actual vs expected squared-error distributions (Steve, 2026-08-20)
+
+An option to generate the graphs Carlisle used in the 2012 Fujii
+analysis (PMID 22404311): for each trial - and pooled - the observed
+distribution of a homogeneity statistic plotted against its expected
+distribution under honest sampling, so a reader SEES the baseline data
+hugging the mean more tightly than chance allows, rather than taking a
+p-value's word for it.
+
+Steve's spec:
+- the statistic is the squared error, as in Carlisle's figures;
+- output is a **PowerPoint file** (one slide per trial, presumably,
+  plus a pooled slide), generated on demand;
+- delivered as an additional file in the **Download Results** flow.
+
+Notes for the implementer: the Monte Carlo engine already simulates the
+expected distribution as a by-product of computing each row's p - the
+work is capturing it rather than discarding it, then rendering. The
+`officer` package writes .pptx natively from R (no Office needed on the
+server); plots via base graphics or ggplot2 into the slides. Download
+Results currently returns one xlsx; adding a second downloadable
+artifact needs either a second button or a zip of the two - Steve's
+call when this is built.
+
+---
+
 ## Closed
 
 ### 2. Point https://integrityanalysis.io at the app (closed 2026-08-19)
