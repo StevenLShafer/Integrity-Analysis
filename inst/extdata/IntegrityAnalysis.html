@@ -598,12 +598,21 @@ analysis assumed</strong> (the rounding columns), so this sheet is the
 direct comparison against the manuscript page: if it disagrees with the
 page, so did the analysis.</li>
 </ul>
-<p><em>Sheet 3, <code>Summary</code></em> — one line per study, and
-nothing else: the trial name, its combined
-<code>P (one-sided toward homogeneity)</code>, and the
-<code>95% Monte Carlo interval</code> where one was reported. This is
-the sheet to keep when screening many manuscripts — the per-line detail
-stays in sheet 1 for the ones worth a second look.</p>
+<p><em>Sheet 3, <code>Summary</code></em> — one line per study: the
+trial name, its combined <code>P (one-sided toward homogeneity)</code>,
+and the <code>95% Monte Carlo interval</code> where one was reported.
+When the analysis holds <strong>two or more trials</strong>, a closing
+bold row gives the <strong>overall P for the entire analysis</strong> —
+the same Stouffer (sum-of-z) combination the app applies within each
+trial, now applied across the trial P values. This is the step Carlisle
+took to reach a single p for the whole body of Fujii’s work (<a href="https://pubmed.ncbi.nlm.nih.gov/22404311/">PMID 22404311</a>):
+each trial may look only mildly improbable, but improbability
+<em>accumulates</em>, and the overall P is where a pattern across an
+author’s trials becomes visible. Trials whose P could not be computed
+(<code>No values</code>) are left out, and the row’s label says how many
+combined. This is the sheet to keep when screening many manuscripts —
+the per-line detail stays in sheet 1 for the ones worth a second
+look.</p>
 <p><strong>Download Table</strong> — the current grid as a spreadsheet.
 This is a valid input file: for a partially extracted PDF it is the
 round trip (fill the gaps in Excel, re-upload), and for hand-typed data

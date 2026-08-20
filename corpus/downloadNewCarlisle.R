@@ -67,6 +67,9 @@ manifest <- if (file.exists(manifestPath)) {
              status = character(), file = character(),
              license = character(), stringsAsFactors = FALSE)
 }
+# An idconv_failed row is an unanswered question, not a result: drop it
+# so this run asks again.
+manifest <- manifest[manifest$status != "idconv_failed", ]
 todo <- setdiff(pmids, manifest$PMID)
 cat("Already resolved:", nrow(manifest), " To do:", length(todo), "\n")
 
@@ -82,16 +85,32 @@ pause <- function() Sys.sleep(1)
 # assumptions, unlike elink's by_id list, which broke here).
 cat("\n== Phase 1: PubMed -> PMC id mapping ==\n")
 pmcOf <- setNames(rep(NA_character_, length(todo)), todo)
-chunks <- split(todo, ceiling(seq_along(todo) / 200))
+# Which PMIDs were actually ASKED about successfully. Without this, a
+# failed request is indistinguishable from a genuine "not in PMC", and
+# the manifest records a definitive negative for a question that was
+# never answered. That happened: one failed chunk made all 185 Fujii
+# PMIDs read "no_pmc_record", and three of them are in PMC. Chunks are
+# smaller now, retried, and a chunk that still fails is recorded as
+# idconv_failed so a rerun asks again.
+looked <- setNames(rep(FALSE, length(todo)), todo)
+chunks <- split(todo, ceiling(seq_along(todo) / 100))
 for (ci in seq_along(chunks)) {
   ch <- chunks[[ci]]
   u <- paste0(
     "https://www.ncbi.nlm.nih.gov/pmc/utils/idconv/v1.0/",
     "?tool=IntegrityAnalysis&email=steven.shafer%40stanford.edu",
     "&format=json&ids=", paste(ch, collapse = ","))
-  j <- tryCatch(jsonlite::fromJSON(u),
-                error = function(e) { message("idconv chunk ", ci, ": ",
-                                              e$message); NULL })
+  j <- NULL
+  for (attempt in 1:3) {
+    j <- tryCatch(jsonlite::fromJSON(u),
+                  error = function(e) { message("idconv chunk ", ci,
+                                                " attempt ", attempt, ": ",
+                                                e$message); NULL })
+    if (!is.null(j) && !is.null(j$records)) break
+    Sys.sleep(2)
+  }
+  if (!is.null(j) && !is.null(j$records)) looked[ch] <- TRUE
+  else cat("  !! idconv failed for a chunk of", length(ch), "PMIDs\n")
   if (!is.null(j) && !is.null(j$records) && "pmcid" %in% names(j$records)) {
     r <- j$records
     hit <- !is.na(r$pmcid) & nzchar(r$pmcid)
@@ -172,6 +191,13 @@ extractPdfFromTgz <- function(tgz, dest) {
   exd <- tempfile(); dir.create(exd)
   files <- tryCatch(untar(tgz, list = TRUE),
                     error = function(e) character(0))
+  # SECURITY (2026-08-20 review): refuse entries that could write outside
+  # exd - "../evil.pdf" or an absolute path passes the .pdf filter and
+  # untar() follows it. PMC is a trusted source, but the check costs one
+  # line and a poisoned archive is exactly the sort of thing a
+  # fraud-detection tool should expect.
+  files <- files[!grepl("^([/\\\\]|[A-Za-z]:)", files) &
+                   !grepl("(^|[/\\\\])[.][.]([/\\\\]|$)", files)]
   pdfs <- files[grepl("\\.pdf$", files, ignore.case = TRUE)]
   if (length(pdfs) == 0) { unlink(c(tgz, exd), recursive = TRUE)
                            return(NA_character_) }
@@ -189,7 +215,10 @@ for (pmid in todo) {
   row <- data.frame(PMID = pmid, PMCID = ifelse(is.na(pmcid), "", pmcid),
                     status = "", file = "", license = "",
                     stringsAsFactors = FALSE)
-  if (is.na(pmcid)) {
+  if (!looked[[pmid]]) {
+    # Never answered, so do not record an answer.
+    row$status <- "idconv_failed"
+  } else if (is.na(pmcid)) {
     row$status <- "no_pmc_record"
   } else {
     oa <- oaCheck(pmcid); pause()

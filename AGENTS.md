@@ -103,6 +103,53 @@ parsing challenge: `corpus/` (see its README).
   one-row data.frame carrying `datapath`, and read `<<-`-mutated state via
   `session$env$...` (the test block only sees a clone).
 
+## Security
+
+Security must be assured before anything deploys (Steve's requirement,
+2026-08-20). The threat model is specific and unusual: **the adversary is
+the author of a manuscript under investigation.** An editor can be
+induced to upload a file that author crafted, so every uploaded artifact
+- spreadsheet, PDF, file *name* - is hostile input.
+
+The standing conclusions of the 2026-08-20 full-repository review:
+
+- **A malicious document cannot execute code here.** PDFs are parsed by
+  poppler (via pdftools), which reads them as data and never runs their
+  embedded JavaScript; in the app every parse runs in a subprocess with
+  a 60-second OS timeout, so a crafted PDF can at worst crash or stall
+  its own subprocess. Spreadsheet readers (read.csv, openxlsx, readxl)
+  parse data, not code. Nothing in `R/` evaluates constructed code
+  (`eval`, `parse(text=)`, `system`, shell) - the one subprocess
+  launcher (`parseBaselineTableFiles.R`) shQuote()s every argument and
+  runs `Rscript --vanilla`.
+- **User text is escaped before it reaches HTML.** The comments log is
+  rendered with `HTML()`; every message is escaped at the single entry
+  point (`outputComments.R::.escapeHtml`) because uploaded file names
+  flow into it.
+- **Workbooks we write cannot smuggle formulas.** openxlsx writes
+  character cells as strings; a grid cell starting with `=` stays text.
+  `writeFormula()` is used only in local corpus tooling on our own
+  strings, never on uploaded content.
+- **The AI fallback is off in deployment** (`ai = "never"`), so
+  manuscript text - and any prompt-injection payload inside it - never
+  reaches an LLM from the app.
+- **Deploy secrets stay out of reach.** Workflows trigger on
+  `pull_request`, never `pull_request_target`; forked PRs get no
+  secrets. The API key lives only in the environment, never in code.
+- **Archives are extracted defensively.** Any zip/tgz handling must
+  refuse absolute paths and `..` components, extract by basename into a
+  fresh directory, cap entry count and total uncompressed size, and
+  never recurse into nested archives.
+
+**The gate:** `tools/securityCheck.R` mechanises the properties above
+that a one-line diff could silently break, and runs in both
+`R-CMD-check.yaml` (every PR) and `deploy-production.yaml` (before every
+deploy - a failure stops the deploy). Run it locally with
+`Rscript tools/securityCheck.R`. When adding code, keep it green
+honestly: if a new feature genuinely needs a banned primitive, the
+review happens FIRST and the script's allowlist is extended in the same
+PR, with the reasoning in comments.
+
 ## Conventions
 
 - Case sensitivity: shinyapps.io runs Linux — filenames in code must match

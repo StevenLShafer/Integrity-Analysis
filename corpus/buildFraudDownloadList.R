@@ -77,12 +77,29 @@ d$Have <- ifelse(here, dir_,
 
 ## --------------------------------------------------------- the status
 
-freeToRead <- nzchar(d$OA.status) & d$OA.status != "closed"
+# A paper can sit in PMC without being in its open-access subset: free
+# to READ there, not licensed for retrieval (all three found this way
+# are stamped "All rights reserved"). PMC is a friendlier page to click
+# than a publisher paywall, so surface it as the link to use.
+mfPath <- file.path(dir_, "manifest.csv")
+mf <- if (file.exists(mfPath)) read.csv(mfPath, colClasses = "character") else
+  data.frame(PMID = character(), PMCID = character(), status = character(),
+             stringsAsFactors = FALSE)
+im <- match(d$PMID, mf$PMID)
+inPmc <- !is.na(im) & mf$status[im] == "not_in_oa_subset" &
+  nzchar(ifelse(is.na(im), "", mf$PMCID[im]))
+d$PMC.URL <- ifelse(inPmc,
+                    paste0("https://pmc.ncbi.nlm.nih.gov/articles/",
+                           mf$PMCID[im], "/"), "")
+d$Free.URL[inPmc & !nzchar(d$Free.URL)] <- d$PMC.URL[inPmc & !nzchar(d$Free.URL)]
+
+freeToRead <- (nzchar(d$OA.status) & d$OA.status != "closed") | inPmc
 d$Status <- ifelse(
   nzchar(d$Have), "have PDF",
   ifelse(is.na(d$PMID), "unresolved: no PubMed record",
+  ifelse(inPmc, "manual: free to read in PMC",
   ifelse(freeToRead, "manual: free copy online",
-         "manual: subscription (Lane proxy)")))
+         "manual: subscription (Lane proxy)"))))
 
 cat("\nStatus:\n"); print(table(d$Status))
 
@@ -90,7 +107,8 @@ cat("\nStatus:\n"); print(table(d$Status))
 
 # Easiest first, then grouped by journal and year so a single library
 # session can sweep a run of them.
-rank <- match(d$Status, c("manual: free copy online",
+rank <- match(d$Status, c("manual: free to read in PMC",
+                          "manual: free copy online",
                           "manual: subscription (Lane proxy)",
                           "unresolved: no PubMed record", "have PDF"))
 o <- order(rank, d$journal, suppressWarnings(as.numeric(d$year)))
