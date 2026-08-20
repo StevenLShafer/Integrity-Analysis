@@ -53,13 +53,42 @@ outputComments <- function(
       {
         for (line in outputString) cat(line, "\n")
       }
-      for (line in outputString) commentsLog(paste0(commentsLog(), "<br>", line))
+      for (line in outputString)
+        commentsLog(paste0(commentsLog(), "<br>", .escapeHtml(line)))
     } else {
       if (echo)
       {
         cat(text, "\n")
       }
-      commentsLog(paste0(commentsLog(), "<br>", text))
+      commentsLog(paste0(commentsLog(), "<br>", .escapeHtml(text)))
     }
   })
+}
+
+#' Escape text for the HTML comments panel
+#'
+#' SECURITY (2026-08-20, security review): the comments log is rendered
+#' with `HTML()` in app_server (the log's own line breaks are `<br>`
+#' tags), and messages routinely embed USER-CONTROLLED strings - most
+#' directly the names of uploaded files. The threat model here is not
+#' hypothetical: the adversary for this app is the AUTHOR of a manuscript
+#' under investigation, and an editor can be induced to upload a file the
+#' author supplied. Without escaping, a file named
+#' `<img src=x onerror=...>.pdf` would execute script in the editor's
+#' session. Every message is therefore escaped at the single point where
+#' it enters the log; no caller passes intentional markup (verified over
+#' all 25 call sites). Local rather than htmltools::htmlEscape to keep
+#' the security property visible in this file (same reasoning as the
+#' local sumz()). tools/securityCheck.R asserts this function stays in
+#' use here.
+#'
+#' @param x character vector.
+#' @return `x` with HTML metacharacters escaped.
+#' @noRd
+.escapeHtml <- function(x) {
+  x <- gsub("&", "&amp;", x, fixed = TRUE)
+  x <- gsub("<", "&lt;", x, fixed = TRUE)
+  x <- gsub(">", "&gt;", x, fixed = TRUE)
+  x <- gsub("\"", "&quot;", x, fixed = TRUE)
+  gsub("'", "&#39;", x, fixed = TRUE)
 }

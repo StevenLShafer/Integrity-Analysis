@@ -40,6 +40,9 @@ jobs:
           r-version: release
           use-public-rspm: true
 
+      - name: Security check (tools/securityCheck.R - see AGENTS.md "Security")
+        run: Rscript tools/securityCheck.R
+
       - uses: r-lib/actions/setup-r-dependencies@v2
         with:
           extra-packages: any::rcmdcheck
