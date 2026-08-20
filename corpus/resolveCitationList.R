@@ -320,6 +320,15 @@ if (!offline) {
     cat("  resolved so far:", sum(!is.na(work$PMID)), "\n")
   }
 }
+# PubMed's esummary can hand back a placeholder for an id it cannot
+# serve ("Not found"), which then travels downstream as if it were a
+# PMID. Only digits are a PMID.
+bogus <- !is.na(work$PMID) & !grepl("^[0-9]+$", work$PMID)
+if (any(bogus)) {
+  cat("discarded", sum(bogus), "non-numeric PMID value(s) from PubMed
+")
+  work$PMID[bogus] <- NA_character_
+}
 work$HOW[is.na(work$PMID)] <- "UNRESOLVED"
 
 ## --------------------------------------------- what we already have
