@@ -919,6 +919,19 @@ app_server <- function(input, output, session) {
       # PowerPoint of actual-vs-expected distributions, zipped. Both are
       # staged under tempdir() (purged with the session); zip::zip with
       # root keeps the archive flat.
+      #
+      # Steve's review of PR #46: a big analysis builds a big deck (a
+      # Fujii-sized run is ~170 slides, tens of seconds), and a silent
+      # button invites a second click and a second build. So: the
+      # button greys out for the duration, and the same progress
+      # notification the app uses for parsing and analysis counts the
+      # slides. Both are restored/closed even if the build errors.
+      shinyjs::disable("download")
+      progress <- shiny::Progress$new(session, style = "notification")
+      on.exit({ progress$close(); shinyjs::enable("download") },
+              add = TRUE)
+      progress$set(message = "Preparing results ", value = 0,
+                   detail = "workbook")
       stage <- file.path(tempdir(),
                          paste0("dl", format(Sys.time(), "%H%M%OS3")))
       dir.create(stage)
@@ -927,7 +940,12 @@ app_server <- function(input, output, session) {
       pf <- file.path(stage, "Integrity Analysis Graphs.pptx")
       writeResultsWorkbook(OUTPUT, reactiveDataValidated(),
                            CategoryNames, xf)
-      writeGraphsPptx(OUTPUT, graphsData, pf)
+      writeGraphsPptx(OUTPUT, graphsData, pf,
+                      progress = function(done, total)
+                        progress$set(value = done / total,
+                                     detail = paste0("graph slide ", done,
+                                                     " of ", total)))
+      progress$set(value = 1, detail = "zipping")
       zip::zip(file, files = basename(c(xf, pf)), root = stage,
                mode = "cherry-pick")
     })

@@ -104,9 +104,14 @@ newGraphCollector <- function() {
 #' @param file path of the .pptx to write.
 #' @param rowCutoff per-row slides appear only for rows with
 #'   p <= rowCutoff (issue 16: the deck ends with the smoking guns).
+#' @param progress optional callback `function(done, total)` called after
+#'   each slide - a large analysis builds a large deck (a Fujii-sized
+#'   run is ~170 trial slides), and the download button gives no sign of
+#'   life on its own (Steve's review of PR #46).
 #' @return invisibly, the number of slides written.
 #' @noRd
-writeGraphsPptx <- function(results, collector, file, rowCutoff = 0.01) {
+writeGraphsPptx <- function(results, collector, file, rowCutoff = 0.01,
+                            progress = NULL) {
   rows <- collector$rows
 
   # trial p's: same carry-down walk as writeResultsWorkbook
@@ -120,6 +125,15 @@ writeGraphsPptx <- function(results, collector, file, rowCutoff = 0.01) {
     }
   }
 
+  # slide count up front, so the progress callback can say "12 of 40"
+  rowP <- vapply(rows, function(r) r$p, numeric(1))
+  rowTrial <- vapply(rows, function(r) r$trial, character(1))
+  nGun <- sum(!is.na(rowP) & rowP <= rowCutoff &
+                !vapply(rows, function(r) is.null(r$draws), logical(1)))
+  nPerTrial <- sum(table(rowTrial) >= 2)
+  total <- 1L + as.integer(length(tp) >= 2) + nPerTrial + nGun
+  tick <- function(done) if (!is.null(progress)) progress(done, total)
+
   doc <- officer::read_pptx()
   nSlides <- 0L
   addGraph <- function(title, plotFun) {
@@ -130,6 +144,7 @@ writeGraphsPptx <- function(results, collector, file, rowCutoff = 0.01) {
     doc <<- officer::ph_with(doc, rvg::dml(code = plotFun()),
                              location = officer::ph_location_type("body"))
     nSlides <<- nSlides + 1L
+    tick(nSlides)
   }
 
   # title slide
@@ -143,6 +158,7 @@ writeGraphsPptx <- function(results, collector, file, rowCutoff = 0.01) {
     "more alike than honest sampling allows."),
     location = officer::ph_location_type("subTitle"))
   nSlides <- nSlides + 1L
+  tick(nSlides)
 
   # overall: the Carlisle 2012 figure
   if (length(tp) >= 2) {
