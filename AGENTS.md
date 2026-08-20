@@ -179,8 +179,12 @@ PR, with the reasoning in comments.
   the comment there). A PR whose check is red is not mergeable — fix
   the tests, never bypass.
 - **The deploy trio is live** (2026-08-19, phase 5 complete):
-  `deploy-production.yaml` redeploys production on every push to
-  `main`; `deploy-pr-app.yaml` deploys `IntegrityAnalysis_PR_<n>` for
+  `deploy-production.yaml` redeploys production after `R-CMD-check`
+  SUCCEEDS on a `main` commit (2026-08-20: it triggers on that
+  workflow's completion and deploys that exact tested SHA, so the
+  553-assertion suite passing before every deploy is a mechanism, not
+  a convention; `workflow_dispatch` remains for manual redeploys);
+  `deploy-pr-app.yaml` deploys `IntegrityAnalysis_PR_<n>` for
   every PR — banner auto-generated as "PR #n: <PR title>", link posted
   as a PR comment, redeployed on each push; `cleanup-pr-app.yaml`
   purges the app when the PR closes. So: DO NOT manually deploy
