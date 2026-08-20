@@ -96,10 +96,24 @@ surnameOf <- function(s) {
 # The title, for the esearch fallback: the sentence between the author
 # list and the journal name. Authors end at ": " (Boldt's style) or at
 # the first ". " that follows an initial.
+# The title, for matching. Some citations separate author list, title
+# and journal with ". " - but plenty in these sheets do not ("Joachim
+# Boldt Michael Ducke Bernhard Kumle ... Influence of different volume
+# replacement strategies ... Intensive Care Med 2004;30:416-422"), and
+# a naive split then returns the JOURNAL LOCATOR as the title. That is
+# not a harmless mistake: "Intensive Care Med 2004;30:416-422" reduces
+# to the words {intensive, care, 2004}, which match ~100% against
+# almost any anaesthesia paper and produced two confidently wrong
+# identifications before this was caught. So: cut the locator off
+# first, then take the longest remaining sentence, and refuse to return
+# something that still looks like a locator.
 titleOf <- function(s) {
-  x <- sub("^.*?(: |\\. )", "", s)     # drop the author list
-  x <- sub("\\.[^.]*$", "", x)          # drop the trailing journal+locator
+  x <- sub(paste0(LOC_RE, ".*$"), "", s)   # everything before "2004;30:416"
+  x <- sub("[^.]*$", "", x)                # drop the trailing journal name
+  x <- sub("^.*?(: |\\. )", "", x)         # drop the author list
   parts <- strsplit(x, "\\. ")[[1]]
+  parts <- parts[nchar(parts) > 20]
+  if (!length(parts)) return("")
   parts[which.max(nchar(parts))]
 }
 
