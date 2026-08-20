@@ -17,3 +17,6 @@ rsconnect/
 IntegrityAnalysis.Rcheck/
 IntegrityAnalysis_*.tar.gz
 .NewCarlisle/
+# the Boldt and Fujii working dirs (resolved PMIDs, manifests, PDFs)
+.Boldt/
+.Fujii/

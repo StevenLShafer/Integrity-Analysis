@@ -97,6 +97,51 @@ The filer reads `.NewCarlisle/inbox` and **not** the Downloads folder:
 Steve reviews for many journals, so that folder holds confidential
 manuscripts no script here should be opening.
 
+## The Boldt and Fujii corpora
+
+`corpus/Boldt.xlsx` and `corpus/Fujii.xlsx` list the published output of
+the two serial fraudsters atop the Retraction Watch leaderboard - 115
+and 192 papers. They are wanted as **fraud-positive** material for
+refining the parser, and they are kept in their own gitignored
+directories, `.Boldt/` and `.Fujii/`, so they never blur into the
+Carlisle baseline corpus.
+
+Neither spreadsheet carries a PMID or a DOI - only a citation string -
+so an extra step comes first:
+
+- **`resolveCitationList.R <boldt|fujii>`** turns citations into PMIDs:
+  the Carlisle master sheet (offline, and certain, since many of these
+  papers are in it), then NCBI's `ecitmatch`, then "everything this
+  author published that year", matched locally on title and settled by
+  volume and first page. Writes `<dir>/pmids.csv`. It resolves 111/115
+  Boldt and 185/192 Fujii; the rest are reported, never guessed.
+
+The other three scripts then run over these lists too, each taking the
+source and output directory as arguments:
+
+```
+Rscript corpus/resolveCitationList.R fujii
+Rscript corpus/downloadNewCarlisle.R .Fujii/pmids.csv .Fujii   # PMC pass
+Rscript corpus/unpaywallDiscovery.R  .Fujii/pmids.csv .Fujii   # census
+Rscript corpus/buildFraudDownloadList.R fujii                  # worklist
+```
+
+**Both corpora turned out to be 100% manual.** The PMC pass found
+nothing at all (0 of 98 Boldt, 0 of 185 Fujii - none of these papers are
+in PMC), and the census found a single CC-licensed Boldt paper whose
+only copy is a landing page. So `buildFraudDownloadList.R` orders its
+worklist by how easily a paper can be got - free copies first, then
+subscription rows grouped by journal so one library session sweeps a run
+of them - rather than by a p-value, which these lists do not have.
+
+Papers that cannot be resolved at all are worth knowing about: Fujii's 7
+are in *Anesthesia and Resuscitation* (麻酔と蘇生), a Japanese journal
+PubMed does not index, so no PMID exists; Boldt's 4 are rows whose
+citation carries no year, volume or page.
+
+Downloads from these lists go through the same inbox and
+`fileDownloads.R` as everything else.
+
 Steve works down the `Queue` **a handful per day** through Stanford's
 Lane Library. Individual downloads are within Lane's terms; systematic
 bulk retrieval is not, and no script in this repository attempts it.

@@ -38,8 +38,12 @@ suppressPackageStartupMessages({
   library(jsonlite)
 })
 
+args    <- commandArgs(trailingOnly = TRUE)
 root    <- "C:/dev/IntegrityAnalysis"
-outDir  <- file.path(root, ".NewCarlisle")
+absolute <- function(p) if (grepl("^([A-Za-z]:|/)", p)) p else file.path(root, p)
+# Default .NewCarlisle; takes an argument so the same pass runs over the
+# Boldt and Fujii corpora, which keep their own directories.
+outDir  <- absolute(if (length(args) >= 1) args[1] else ".NewCarlisle")
 manifestPath <- file.path(outDir, "licensed_manifest.csv")
 dir.create(outDir, showWarnings = FALSE)
 

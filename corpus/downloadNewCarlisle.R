@@ -18,7 +18,18 @@
 # is explicit.
 #
 # Usage:
-#   "C:\Program Files\R\R-4.5.3\bin\Rscript.exe" corpus/downloadNewCarlisle.R
+#   "C:\Program Files\R\R-4.5.3\bin\Rscript.exe" corpus/downloadNewCarlisle.R [pmidSource] [outDir]
+#
+#   pmidSource  .xlsx or .csv carrying a PMID column. Default is the
+#               Carlisle lookup, which is what this script was written
+#               for; it takes an argument so the same pass can run over
+#               the Boldt and Fujii lists (2026-08-19), whose PMIDs
+#               corpus/resolveCitationList.R recovers from citations.
+#   outDir      where the PDFs and the manifest go (default
+#               .NewCarlisle). Keep the fraud corpora in their own
+#               directories, .Boldt and .Fujii, so they stay separable
+#               from the Carlisle baseline corpus.
+#
 # Resumable: re-running skips PMIDs already resolved in the manifest.
 # NCBI etiquette: <= 3 requests/second without an API key (set
 # NCBI_API_KEY for 10/s); this script sleeps between requests.
@@ -29,15 +40,23 @@ suppressPackageStartupMessages({
   library(xml2)
 })
 
+args   <- commandArgs(trailingOnly = TRUE)
 root   <- "C:/dev/IntegrityAnalysis"
-outDir <- file.path(root, ".NewCarlisle")
+srcArg <- if (length(args) >= 1) args[1] else
+  file.path(root, "Carlisle PMID to DOI lookup.xlsx")
+outDir <- if (length(args) >= 2) args[2] else file.path(root, ".NewCarlisle")
+absolute <- function(p) if (grepl("^([A-Za-z]:|/)", p)) p else file.path(root, p)
+srcArg <- absolute(srcArg); outDir <- absolute(outDir)
 dir.create(outDir, showWarnings = FALSE)
 manifestPath <- file.path(outDir, "manifest.csv")
 
-lookup <- read.xlsx(file.path(root, "Carlisle PMID to DOI lookup.xlsx"))
+lookup <- if (grepl("[.]csv$", srcArg, ignore.case = TRUE))
+  read.csv(srcArg, colClasses = "character") else read.xlsx(srcArg)
+if (!"PMID" %in% names(lookup)) stop("no PMID column in ", srcArg)
 pmids <- unique(as.character(lookup$PMID))
-pmids <- pmids[!is.na(pmids) & nzchar(pmids)]
-cat("PMIDs in the lookup:", length(pmids), "\n")
+pmids <- pmids[!is.na(pmids) & nzchar(pmids) & pmids != "NA"]
+cat("Source:", srcArg, "\nOutput:", outDir,
+    "\nPMIDs to consider:", length(pmids), "\n")
 
 manifest <- if (file.exists(manifestPath)) {
   m <- read.csv(manifestPath, colClasses = "character")
