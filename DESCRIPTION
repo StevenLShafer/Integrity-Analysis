@@ -51,6 +51,7 @@ Collate:
   sumz.R
   outputComments.R
   validateData.R
+  zipUpload.R
   P_Calc.R
   baselineTable.R
   usageCount.R
