@@ -162,11 +162,12 @@ app_ui <- function(testNote = NULL)
           12,
           HTML(paste0(
             "<br>Select one or more data entry spreadsheets (csv, xls, ",
-            "xlsx) and/or article PDFs - files combine into one table, ",
-            "distinguished by trial - or start with an empty table and ",
-            "type the data in<br>")),
+            "xlsx), article PDFs, or a zip of many such files - ",
+            "everything combines into one table, distinguished by ",
+            "trial - or start with an empty table and type the data ",
+            "in<br>")),
           fileInput("upload", NULL, multiple = TRUE,
-                    accept = c(".csv", ".xls", ".xlsx", ".pdf")),
+                    accept = c(".csv", ".xls", ".xlsx", ".pdf", ".zip")),
           actionButton("blank", "Start With an Empty Table"),
           HTML("<br><br>"),
           # The editable pre-analysis grid (Steve's request, 2026-08-17):

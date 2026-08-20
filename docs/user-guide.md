@@ -9,6 +9,7 @@
   one-sided p toward homogeneity, adaptive replicates, the editable grid,
   color-coded cells, median/IQR rows, PDF parsing, multi-file upload, the
   purge guarantee, and the journal-style baseline table download.
+  Zipped multi-file upload added 2026-08-20.
 
   TO REGENERATE THE SERVED HTML after editing this file:
     "C:\Program Files\Quarto\bin\tools\pandoc.exe" docs/user-guide.md
@@ -117,7 +118,7 @@ results (see *Validation* below).
    later session), and the reconstructed baseline table (the
    journal-style view, for comparison against the manuscript).
 
-## The four ways in
+## The five ways in
 
 **A template spreadsheet.** Download the Template (sidebar), fill it in
 (Excel `.xlsx`/`.xls` or `.csv`), and upload it. The Example download
@@ -142,6 +143,18 @@ file without trial identifiers gets its file name as the trial. If a new
 file uses trial labels already in the table, its labels are prefixed
 with its file name so nothing silently merges. To start over, click
 **Start With an Empty Table**.
+
+**A zip archive of a whole analysis.** Zip any number of spreadsheets
+and article PDFs into one `.zip` and upload just that. This is built
+for reproducing a multi-trial investigation — the pattern of Carlisle's
+2012 review of Fujii's 168 trials
+([PMID 22404311](https://pubmed.ncbi.nlm.nih.gov/22404311/)): put one
+file per trial in the archive and every entry becomes its own trial in
+the combined table, named after its file. Folders inside the archive
+are fine (only the file names are used); files that are not
+csv/xls/xlsx/PDF are skipped with a note, an archive inside the archive
+is not expanded, and a corrupt archive is reported rather than
+analyzed. Limits: 300 files and 300 MB uncompressed per archive.
 
 **An empty table.** Click **Start With an Empty Table** and type the
 data straight into the grid — eight empty rows and placeholder category

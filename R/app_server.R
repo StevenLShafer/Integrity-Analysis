@@ -595,6 +595,17 @@ app_server <- function(input, output, session) {
       files$ext <- tolower(tools::file_ext(files$name))
       files$stem <- tools::file_path_sans_ext(files$name)
 
+      # Zipped upload (Steve's request, 2026-08-20): an investigator
+      # reproducing an analysis like Carlisle's 2012 Fujii review zips
+      # every trial file and uploads ONE archive. Each entry becomes an
+      # ordinary uploaded file here - same pipeline, same TRIAL-per-file
+      # naming. Extraction is defensive (see R/zipUpload.R: junkpaths
+      # into fresh directories, traversal names refused, entry and size
+      # caps, no nested archives); extracted files land under tempdir(),
+      # so the purge guarantee covers them like any direct upload.
+      files <- expandZipUploads(files)
+      uploadedPaths <<- unique(c(uploadedPaths, files$datapath))
+
       bad <- !files$ext %in% c("csv", "xlsx", "xls", "pdf")
       for (nm in files$name[bad])
         outputComments(paste0(nm, " is not a supported file type."))

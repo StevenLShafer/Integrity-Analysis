@@ -33,7 +33,7 @@ vertical-align: middle;
 <li><a href="#background" id="toc-background">Background</a></li>
 <li><a href="#quick-start" id="toc-quick-start">Quick start</a>
 <ul>
-<li><a href="#the-four-ways-in" id="toc-the-four-ways-in">The four ways
+<li><a href="#the-five-ways-in" id="toc-the-five-ways-in">The five ways
 in</a></li>
 </ul></li>
 <li><a href="#the-data-grid" id="toc-the-data-grid">The data
@@ -79,6 +79,7 @@ roadmap</a></li>
   one-sided p toward homogeneity, adaptive replicates, the editable grid,
   color-coded cells, median/IQR rows, PDF parsing, multi-file upload, the
   purge guarantee, and the journal-style baseline table download.
+  Zipped multi-file upload added 2026-08-20.
 
   TO REGENERATE THE SERVED HTML after editing this file:
     "C:\Program Files\Quarto\bin\tools\pandoc.exe" docs/user-guide.md
@@ -176,7 +177,7 @@ trial’s p value appears as it completes.</li>
 later session), and the reconstructed baseline table (the journal-style
 view, for comparison against the manuscript).</li>
 </ol>
-<h2 id="the-four-ways-in">The four ways in</h2>
+<h2 id="the-five-ways-in">The five ways in</h2>
 <p><strong>A template spreadsheet.</strong> Download the Template
 (sidebar), fill it in (Excel <code>.xlsx</code>/<code>.xls</code> or
 <code>.csv</code>), and upload it. The Example download shows a
@@ -199,6 +200,16 @@ TRIAL column; a file without trial identifiers gets its file name as the
 trial. If a new file uses trial labels already in the table, its labels
 are prefixed with its file name so nothing silently merges. To start
 over, click <strong>Start With an Empty Table</strong>.</p>
+<p><strong>A zip archive of a whole analysis.</strong> Zip any number of
+spreadsheets and article PDFs into one <code>.zip</code> and upload just
+that. This is built for reproducing a multi-trial investigation — the
+pattern of Carlisle’s 2012 review of Fujii’s 168 trials (<a href="https://pubmed.ncbi.nlm.nih.gov/22404311/">PMID 22404311</a>): put
+one file per trial in the archive and every entry becomes its own trial
+in the combined table, named after its file. Folders inside the archive
+are fine (only the file names are used); files that are not
+csv/xls/xlsx/PDF are skipped with a note, an archive inside the archive
+is not expanded, and a corrupt archive is reported rather than analyzed.
+Limits: 300 files and 300 MB uncompressed per archive.</p>
 <p><strong>An empty table.</strong> Click <strong>Start With an Empty
 Table</strong> and type the data straight into the grid — eight empty
 rows and placeholder category columns (CAT1–CAT3) to start. Add rows
