@@ -107,8 +107,10 @@ test_that("BJA's '=' look-alike is repaired", {
 test_that("a document whose plus-minus is really a dash is detected", {
   # BJA 2003: "propofol 1.5±2.5 mg kg±1", "Creutzfeldt±Jakob", "502±6".
   # Read literally, "1.5±2.5" becomes a mean with an SD - invented data.
+  # Evidence is a plus-minus with a letter on BOTH sides (2026-08-21) -
+  # hyphenated words, which the genre produces in quantity.
   bja <- c("Br J Anaesth 2003; 90: 8±13", "propofol 1.5±2.5 mg kg±1 i.v.",
-           "Creutzfeldt±Jakob disease")
+           "Creutzfeldt±Jakob disease", "a non±selective beta±blocker")
   expect_true(.ppPlusMinusIsDash(bja))
 
   # A table that genuinely reports mean ± SD must NOT be flagged
@@ -117,7 +119,25 @@ test_that("a document whose plus-minus is really a dash is detected", {
   expect_false(.ppPlusMinusIsDash(ok))
   expect_false(.ppPlusMinusIsDash(character(0)))
   # A single stray occurrence is not enough to condemn a document
-  expect_false(.ppPlusMinusIsDash(c("mg kg±1", "Age 59 ± 11")))
+  expect_false(.ppPlusMinusIsDash(c("non±selective", "Age 59 ± 11")))
+  # One-sided contact is not evidence at all: "BP±20 mm Hg" is a REAL
+  # plus-minus (the Aldrete score definition), and it appeared three times
+  # in AA-D-13-00678 - the old rule flipped and erased that manuscript's
+  # whole baseline table (found 2026-08-21 via the AI comparison run).
+  expect_false(.ppPlusMinusIsDash(c("BP±20 mm Hg preop", "BP±20±50 mm Hg",
+                                    "BP±50 mm Hg", "mg kg±1",
+                                    "Age (yr) 59 ± 11")))
+})
+
+test_that("Windows Symbol-font private-use glyphs are repaired", {
+  # Word's Symbol font exports as U+F0xx; unrepaired, "47.7<U+F0B1>14.9"
+  # reads as ONE number and every mean/SD cell in the table vanishes
+  # (AA-D-15-01175; found 2026-08-21 via the AI comparison run).
+  expect_equal(.ppNormalizeGlyphs("47.714.9"), "47.7±14.9")
+  expect_equal(.ppNormalizeGlyphs("(n  59)"),  "(n = 59)")
+  expect_equal(.ppNormalizeGlyphs("aged  45"), "aged ≥ 45")
+  expect_equal(.ppNormalizeGlyphs("40 angle"), "40° angle")
+  expect_equal(.ppNormalizeGlyphs("g/mL"),     "µg/mL")
 })
 
 test_that("a repaired cell tokenises as a mean and SD", {
