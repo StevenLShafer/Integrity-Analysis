@@ -111,8 +111,19 @@ jobs:
               name   = Sys.getenv("SHINY_ACCOUNT"),
               token  = Sys.getenv("SHINY_TOKEN"),
               secret = Sys.getenv("SHINY_SECRET"))
+            # renv gotcha (2026-08-21, first lockfile deploy): rsconnect
+            # sees renv.lock in appDir and switches to lockfile-based
+            # dependency capture (parseRenvDependencies), which errored
+            # AND would lose the GitHub-source record for this package.
+            # Stage the one-file app in a clean directory: rsconnect
+            # then captures dependencies from the RESTORED LIBRARY -
+            # which holds exactly the locked versions - and records the
+            # installed package'"'"'s GitHub provenance as always.
+            stage <- file.path(tempdir(), "deploy-stage")
+            dir.create(stage)
+            file.copy("app.R", stage)
             rsconnect::deployApp(
-              appDir = ".",
+              appDir = stage,
               appName = Sys.getenv("SHINY_APP_NAME"),
               appFiles = "app.R",
               account = Sys.getenv("SHINY_ACCOUNT"),
