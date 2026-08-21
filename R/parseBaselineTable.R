@@ -37,6 +37,22 @@ reviewFlags <- function(x) {
                              " treatment arm(s) were found"))
   if (any(is.na(x$arms$N)))
     flags <- c(flags, "arm N is missing for at least one arm")
+  # Recovered arm sizes are usable but not the same thing as an N printed in
+  # the table header: say where each one came from, so a human can verify it
+  # - a text-recovered N against the CONSORT flow diagram in particular
+  # (2026-08-21, armNRecovery.R).
+  if (!is.null(x$armNSource) && any(!is.na(x$armNSource))) {
+    src      <- x$armNSource[!is.na(x$armNSource)]
+    fromText <- grepl("^document text", src)
+    if (any(!fromText))
+      flags <- c(flags, paste0(sum(!fromText), " arm size(s) derived from ",
+                               "the table's own printed n (%) cells"))
+    if (any(fromText))
+      flags <- c(flags, paste0(sum(fromText), " arm size(s) recovered from ",
+                               "the document text - verify against the ",
+                               "CONSORT flow diagram: ",
+                               paste(src[fromText], collapse = " | ")))
+  }
   disp <- if ("SE" %in% names(x$data))
     !is.na(x$data$SD) | !is.na(x$data$SE) else !is.na(x$data$SD)
   cont <- !is.na(x$data$MEAN) | disp

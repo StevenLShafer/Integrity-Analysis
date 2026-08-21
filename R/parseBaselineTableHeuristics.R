@@ -88,7 +88,17 @@
                            "weight|height|\\bbmi\\b|body\\s+mass|\\basa\\b"),
                     allRows, perl = TRUE))
   clusters <- if (is.null(res$clusters)) nrow(res$arms) else res$clusters
-  3 * sum(!is.na(res$arms$N)) +
+  # An arm N printed in the table is strong evidence this really is the
+  # table; a RECOVERED N (n (%) derivation or document text) is worth
+  # NOTHING here, deliberately: recovery text applies to every candidate
+  # of the document, and any score credit for it lets recovery decide
+  # WHICH table wins - it flipped one corpus file from Table 1 to a
+  # results table whose clusters happened to match the document's numbers
+  # (2026-08-21). Recovered Ns still reach the output; they just carry no
+  # weight in choosing between candidate tables.
+  headerN <- if (is.null(res$armNSource)) !is.na(res$arms$N) else
+    !is.na(res$arms$N) & is.na(res$armNSource)
+  3 * sum(headerN) +
     2 * nCont + nCat +
     2 * (nrow(res$arms) >= 2) +
     2 * min(demo, 3) -
@@ -102,7 +112,8 @@
 # two-column hack lifted out: by the time it is called, `lines` already
 # contains only the lines of one typographic column.
 .ppParseBlock <- function(lines, lineTexts, capIdx, trial, parenIsSD,
-                          roundObsDelta, say) {
+                          roundObsDelta, say,
+                          textCands = NULL, textTotals = NULL) {
 
   # Footnote / end-of-table patterns. Checked BEFORE tokenizing, because a
   # footnote like "Values are mean +/- SD" itself contains a mean+/-SD-shaped
@@ -320,6 +331,60 @@
   arms  <- setdiff(seq_len(cols$n), pCol)
   nArms <- length(arms)
   if (nArms == 0) return(NULL)
+
+  # ---- Recover missing arm N (2026-08-21) ----------------------------------
+  # The single largest deficit found by comparing this engine against an
+  # AI-only run of the 654-submission corpus: 583 skipped rows were blocked
+  # ONLY on an unknown arm N. Two deterministic sources, table first:
+  #
+  # (a) The arm's own printed n (%) cells. "13 (68.4%)" pins the arm size
+  #     to the integers consistent with the printed rounding - usually
+  #     exactly one. Traceable entirely to cells on the page.
+  # Recovery only runs when NO data-bearing cluster has an N yet. Measured
+  # on the 654-submission corpus, every genuine recovery was of a table
+  # with no printed arm sizes anywhere; when the real arms already carried
+  # header Ns, recovery only decorated stray clusters (a "%" subcolumn, an
+  # escaped p column, an "All" column) with phantom arm sizes.
+  armNSource <- rep(NA_character_, cols$n)
+  dataArms   <- intersect(arms, unique(cols$assign(allToks$mid)))
+  # Eligibility is decided ONCE, before either source runs: a table whose
+  # header printed no arm size at all. The n (%) derivation may then fill
+  # some arms and the text the rest.
+  recoveryEligible <- length(dataArms) > 0 && all(is.na(armN[dataArms]))
+  if (recoveryEligible) {
+    for (k in dataArms) {
+      kt <- allToks[cols$assign(allToks$mid) == k & allToks$type == "nPct", ,
+                    drop = FALSE]
+      if (nrow(kt) == 0) next
+      n <- .ppDeriveArmN(kt$num1, kt$num2, kt$dec2)
+      if (!is.na(n)) {
+        armN[k] <- n
+        armNSource[k] <- sprintf(
+          "derived from %d printed n (%%) cell(s) of this arm", nrow(kt))
+        say("  arm ", k, ": N = ", n, " ", armNSource[k], ".")
+      }
+    }
+  }
+  # (b) The document text - the randomization sentence of the Methods, the
+  #     abstract, or a CONSORT flow label with a text layer. Candidates and
+  #     stated totals are extracted once per document by the caller; the
+  #     assignment ladder (name match, elimination, position confirmed by
+  #     the stated total) and its safeguards live in armNRecovery.R. Every
+  #     N taken this way carries its source sentence, and reviewFlags()
+  #     tells the reviewer to verify it against the CONSORT diagram.
+  #     The same no-known-N gate applies, for the same measured reason.
+  if (recoveryEligible && any(is.na(armN[dataArms])) &&
+      !is.null(textCands) && nrow(textCands) > 0) {
+    fill <- .ppFillArmNFromText(armN[dataArms], armName[dataArms], textCands,
+                                if (is.null(textTotals)) integer(0)
+                                else textTotals)
+    newly <- is.na(armN[dataArms]) & !is.na(fill$N)
+    armN[dataArms] <- fill$N
+    armNSource[dataArms][newly] <- fill$source[newly]
+    for (k in which(newly))
+      say("  arm ", dataArms[k], ": N = ", fill$N[k], " from ",
+          fill$source[k])
+  }
 
   # ---- How to read "a (b)" cells ------------------------------------------
   footTxt <- paste(footnoteInfo, collapse = " ")
@@ -602,6 +667,7 @@
   list(data       = DATA,
        arms       = data.frame(arm = armName[arms][keep], N = armN[arms][keep],
                                stringsAsFactors = FALSE),
+       armNSource = armNSource[arms][keep],
        clusters   = nArms,
        skipped    = skippedDf,
        dispersion = dispersionBasis)
@@ -708,6 +774,14 @@ parseBaselineTableHeuristics <- function(pdfFile,
   # Submitted manuscripts number every line down the left margin; strip the
   # rail before anything downstream sees it (2026-08-20, see pageLayout.R).
   allPages <- lapply(allPages, .ppStripLineNumberRail)
+  # Arm-N recovery candidates are document-level constants: the "(n = 24)"
+  # mentions with allocation-flavoured context, and the stated randomized
+  # totals that confirm a positional assignment. Extracted once here, used
+  # by every candidate parse (2026-08-21, see armNRecovery.R).
+  fullText   <- if (isTRUE(ocr)) character(0) else
+    tryCatch(.ppPdfText(pdfFile), error = function(e) character(0))
+  textCands  <- .ppArmNCandidatesFromText(fullText)
+  textTotals <- .ppRandomizedTotals(fullText)
   nWords   <- sum(vapply(allPages, nrow, integer(1)))
   if (length(allPages) == 0 || nWords == 0)
     stop("No text layer found in ", pdfFile,
@@ -849,7 +923,8 @@ parseBaselineTableHeuristics <- function(pdfFile,
     tried <- tried + 1L
     res <- tryCatch(
       .ppParseBlock(cc$lines, cc$lineTexts, cc$capIdx, trial, parenIsSD,
-                    roundObsDelta, function(...) invisible(NULL)),
+                    roundObsDelta, function(...) invisible(NULL),
+                    textCands = textCands, textTotals = textTotals),
       error = function(e) NULL)
     sc <- .ppParseScore(res)
     if (!is.finite(sc)) next
@@ -900,7 +975,8 @@ parseBaselineTableHeuristics <- function(pdfFile,
       resExt <- tryCatch(
         .ppParseBlock(c(extLines, lines2), c(extTexts, lt2), bestCand$capIdx,
                       trial, parenIsSD, roundObsDelta,
-                      function(...) invisible(NULL)),
+                      function(...) invisible(NULL),
+                      textCands = textCands, textTotals = textTotals),
         error = function(e) NULL)
       if (.ppParseScore(resExt) <= .ppParseScore(best)) break
       best      <- resExt
@@ -935,6 +1011,7 @@ parseBaselineTableHeuristics <- function(pdfFile,
          trial      = trial,
          layout     = bestCand$mode,
          dispersion = best$dispersion,
+         armNSource = best$armNSource,
          engine     = "heuristic"),
     class = "ParsePDFTable")
 }
