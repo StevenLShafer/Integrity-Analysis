@@ -60,8 +60,7 @@ jobs:
               nm %in% apps$name
             }
             if (!exists()) {
-              cat(nm, "does not exist - nothing to purge
-")
+              cat(nm, "does not exist - nothing to purge\n")
               quit(status = 0)
             }
             for (attempt in 1:5) {
@@ -72,17 +71,14 @@ jobs:
                                     server = "shinyapps.io")
                 TRUE
               }, error = function(e) {
-                cat("attempt", attempt, "failed:", conditionMessage(e), "
-")
+                cat("attempt", attempt, "failed:", conditionMessage(e), "\n")
                 FALSE
               })
               if (ok || !exists()) break
               Sys.sleep(60)   # outlast the concurrent production deploy
             }
             if (exists()) {
-              cat("FAILED:", nm, "still exists after 5 attempts
-")
+              cat("FAILED:", nm, "still exists after 5 attempts\n")
               quit(status = 1)
             }
-            cat(nm, "terminated and purged
-")'
+            cat(nm, "terminated and purged\n")'
