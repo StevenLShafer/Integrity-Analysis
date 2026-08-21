@@ -54,7 +54,36 @@
   "\u00bc" = "=",
   # ...and its "fl" ligature, which turns desflurane into "des-urane".
   # Affects row labels only, never numbers.
-  "\u00af" = "fl")
+  "\u00af" = "fl",
+  # Windows Symbol-font private-use glyphs (2026-08-21, found by comparing
+  # the deterministic run of 654 A&A submissions against an AI-only run):
+  # Word documents that type "+/-" or "=" with the Symbol font export as
+  # U+F0xx, where xx is the character's position in the Adobe Symbol
+  # encoding - a fixed, documented mapping, not a per-document guess. The
+  # cost of missing it is total: "47.7<U+F0B1>14.9" reads as one number, so
+  # every mean/SD cell in the table vanishes (e.g. AA-D-15-01175), and
+  # "(n <U+F03D> 59)" stops being an arm size. Each entry below was also
+  # confirmed against printed context in the corpus: U+F0B1 from
+  # "MAC was 1.86 <U+F0B1> 0.40%", U+F0A3 from "probability of <U+F0A3>
+  # 0.05", U+F0B3 from "aged <U+F0B3> 45 years", U+F06D from
+  # "<U+F06D>g/mL", U+F0B0 from "a distal 40<U+F0B0> angle".
+  "\uf0b1" = "\u00b1",  # plus-minus
+  "\uf03d" = "=",        # equals: "(n = 59)"
+  "\uf0a3" = "\u2264",  # less-or-equal
+  "\uf0b3" = "\u2265",  # greater-or-equal
+  "\uf03c" = "<",
+  "\uf03e" = ">",
+  "\uf02b" = "+",
+  "\uf02d" = "-",
+  "\uf0b4" = "\u00d7",  # multiplication
+  "\uf0d7" = "\u00b7",  # middle dot: "mg<U+F0D7>kg-1"
+  "\uf0b0" = "\u00b0",  # degree
+  "\uf06d" = "\u00b5",  # micro (Symbol mu, used in units)
+  "\uf061" = "\u03b1", "\uf062" = "\u03b2",   # Greek, in labels only
+  "\uf063" = "\u03c7", "\uf064" = "\u03b4",
+  "\uf067" = "\u03b3", "\uf06c" = "\u03bb",
+  "\uf070" = "\u03c0", "\uf072" = "\u03c1",
+  "\uf073" = "\u03c3")
 
 # Apply the repair to a character vector.
 #
@@ -81,10 +110,16 @@
 # as a mean of 1.5 with an SD of 2.5 and INVENTS a baseline value, which is
 # far worse than missing one.
 #
-# The tell is a plus-minus touching a letter: a real plus-minus never does,
-# but a dash does, in units ("kg<pm>1") and hyphenated names. Two such
-# occurrences are taken as proof for the whole document, and every
-# plus-minus in it is then read as the dash it actually is.
+# The tell is a plus-minus with a LETTER ON BOTH SIDES: hyphenated words
+# ("Creutzfeldt<pm>Jakob", "non<pm>selective") occur only when the glyph is
+# really a dash, and the BJA genre produces dozens of them. One-sided
+# contact is NOT evidence (revised 2026-08-21, found by comparing the
+# deterministic run of 654 A&A submissions against an AI-only run): a real
+# plus-minus legitimately touches a letter on one side in "BP<pm>20 mm Hg"
+# (the Aldrete score definition) - that pattern flipped this heuristic and
+# rewrote every genuine plus-minus in AA-D-13-00678, erasing the whole
+# baseline table. Two two-sided occurrences are taken as proof for the
+# whole document, and every plus-minus in it is then read as a dash.
 .ppPlusMinusIsDash <- function(txt) {
   if (!length(txt)) return(FALSE)
   j <- paste(txt, collapse = " ")
@@ -93,14 +128,13 @@
   # counted as proof, and every genuine plus-minus in its table was then
   # rewritten to a hyphen - twenty real mean/SD cells destroyed by a repair
   # aimed at a different journal's font. Notation contexts are discounted
-  # before the evidence is counted (2026-08-20). The \b on sd/sem/se keeps
-  # "non±selective" - a true dash in a hyphenated word - as evidence.
+  # before the evidence is counted (2026-08-20).
   j <- gsub(paste0("(?i)\\b(means?|medians?)\\s*", .ppPLUSMINUS), " ", j,
             perl = TRUE)
   j <- gsub(paste0("(?i)", .ppPLUSMINUS,
                    "\\s*((sd|sem|se)\\b|s\\.d\\.|s\\.e\\.m?\\.)"), " ", j,
             perl = TRUE)
-  pat <- paste0("[A-Za-z]", .ppPLUSMINUS, "|", .ppPLUSMINUS, "[A-Za-z]")
+  pat <- paste0("[A-Za-z]", .ppPLUSMINUS, "[A-Za-z]")
   m   <- gregexpr(pat, j)[[1]]
   if (m[1] == -1) return(FALSE)
   length(m) >= 2
