@@ -31,7 +31,15 @@ opts <- readRDS(args[1])
 # shinyapps.io the package lives in a library the child would not
 # otherwise see.
 .libPaths(opts$libPaths)
-suppressMessages(library(IntegrityAnalysis))
+# devPath set = the parent is a pkgload dev tree: load the same working
+# tree, so the subprocess tests the code under test rather than a stale
+# installed copy (2026-08-20; see parseBaselineTableFiles.R). Otherwise
+# - R CMD check, shinyapps.io - load the installed package as always.
+if (!is.null(opts$devPath)) {
+  suppressMessages(pkgload::load_all(opts$devPath, quiet = TRUE))
+} else {
+  suppressMessages(library(IntegrityAnalysis))
+}
 
 res <- tryCatch(
   suppressMessages(

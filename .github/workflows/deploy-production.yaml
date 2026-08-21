@@ -57,17 +57,40 @@ jobs:
       # after setup-r and before anything heavier.
       - uses: r-lib/actions/setup-r@v2
         with:
-          r-version: release
+          r-version: '4.5.3'     # matches renv.lock
           use-public-rspm: true
 
       - name: Security check (gate - deploy stops here on failure)
         run: Rscript tools/securityCheck.R
 
-      # installs the package's Imports (needed to install the package
-      # itself on the runner) plus the deploy tooling, cached
-      - uses: r-lib/actions/setup-r-dependencies@v2
-        with:
-          extra-packages: any::rsconnect, any::remotes
+      # renv (2026-08-20): the runner's library is restored from
+      # renv.lock, so the versions rsconnect records in the manifest -
+      # and shinyapps.io then installs - are the locked ones. The
+      # deploy TOOLS (rsconnect, remotes) float; they are couriers,
+      # not cargo.
+      - name: System libraries (ubuntu)
+        # setup-r-dependencies used to install these automatically from
+        # SystemRequirements via pak; setup-renv does not, and RSPM
+        # binaries install fine but fail to LOAD without them (found:
+        # pdftools "required" errors = libpoppler-cpp missing).
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends             libpoppler-cpp-dev libcurl4-openssl-dev libssl-dev             libxml2-dev libfontconfig1-dev libfreetype6-dev             libharfbuzz-dev libfribidi-dev libpng-dev libjpeg-dev             libtiff5-dev libcairo2-dev
+
+      - uses: r-lib/actions/setup-renv@v2
+
+      - name: Rebuild Rfast from source (RSPM binary/TBB ABI mismatch)
+        # The prebuilt Linux Rfast binary fails to load - undefined TBB
+        # symbol against the restored RcppParallel. A source build links
+        # RcppParallel's own TBB correctly. renv caches the result, so
+        # this compiles once per lockfile, not once per run.
+        run: |
+          Rscript -e 'options(pkgType = "source");
+                      renv::install("Rfast@2.1.5.2", rebuild = TRUE, prompt = FALSE)'
+
+
+      - name: Deploy tooling (floating)
+        run: Rscript -e 'install.packages(c("rsconnect", "remotes"))'
 
       - name: Install the pushed commit from GitHub and deploy
         env:

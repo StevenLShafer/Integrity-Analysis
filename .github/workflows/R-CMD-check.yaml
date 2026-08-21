@@ -35,20 +35,50 @@ jobs:
 
       - uses: r-lib/actions/setup-pandoc@v2
 
+      # renv (2026-08-20): R and every RUNTIME package version come
+      # from renv.lock - the same environment Steve develops in and
+      # production deploys. Dev tooling (rcmdcheck, testthat) installs
+      # fresh below: its versions cannot touch the Monte Carlo, and
+      # pinning it transitively would drag hundreds of suggests into
+      # the lockfile. Latest-CRAN breakage of the runtime graph is
+      # discovered by cran-canary.yaml on a schedule, not here.
       - uses: r-lib/actions/setup-r@v2
         with:
-          r-version: release
+          r-version: '4.5.3'
           use-public-rspm: true
 
       - name: Security check (tools/securityCheck.R - see AGENTS.md "Security")
         run: Rscript tools/securityCheck.R
 
-      - uses: r-lib/actions/setup-r-dependencies@v2
-        with:
-          extra-packages: any::rcmdcheck
-          needs: check
+      - name: System libraries (ubuntu)
+        # setup-r-dependencies used to install these automatically from
+        # SystemRequirements via pak; setup-renv does not, and RSPM
+        # binaries install fine but fail to LOAD without them (found:
+        # pdftools "required" errors = libpoppler-cpp missing).
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends             libpoppler-cpp-dev libcurl4-openssl-dev libssl-dev             libxml2-dev libfontconfig1-dev libfreetype6-dev             libharfbuzz-dev libfribidi-dev libpng-dev libjpeg-dev             libtiff5-dev libcairo2-dev
+
+      - uses: r-lib/actions/setup-renv@v2
+
+      - name: Rebuild Rfast from source (RSPM binary/TBB ABI mismatch)
+        # The prebuilt Linux Rfast binary fails to load - undefined TBB
+        # symbol against the restored RcppParallel. A source build links
+        # RcppParallel's own TBB correctly. renv caches the result, so
+        # this compiles once per lockfile, not once per run.
+        run: |
+          Rscript -e 'options(pkgType = "source");
+                      renv::install("Rfast@2.1.5.2", rebuild = TRUE, prompt = FALSE)'
+
+
+      - name: Dev tooling (floating - not part of the runtime lockfile)
+        run: Rscript -e 'install.packages(c("rcmdcheck", "testthat", "pkgload"))'
 
       - uses: r-lib/actions/check-r-package@v2
+        env:
+          # Suggests absent from the runtime lockfile (tesseract) must
+          # not fail the check; the suite never exercises OCR in CI
+          _R_CHECK_FORCE_SUGGESTS_: "false"
         with:
           args: 'c("--no-manual", "--as-cran")'
           # Fail on ERRORs (which include any test failure) but tolerate
