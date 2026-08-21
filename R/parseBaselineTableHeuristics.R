@@ -50,21 +50,51 @@
 # That is a drafting aid, not a substitute for reading the table: review   #
 # every parsed value against the printed table before analyzing a          #
 # submission.                                                              #
+#                                                                          #
+# Revised 2026-08-20 by Claude Code (model: Claude Fable 5) at Steve       #
+# Shafer's request, after screening 654 RCT submissions from the A&A       #
+# manuscript corpus (C:/Temp/AA) showed that SUBMITTED MANUSCRIPTS -       #
+# the input the deployed app actually receives - defeated the engine in    #
+# ways journal typography never does: margin line-number rails, legend     #
+# sentences between the caption and the table, captions on a different     #
+# page than their table, tables running over page breaks, and the gutter   #
+# detector splitting a wide Word table into a labels band and a values     #
+# band. Each repair is marked "2026-08-20" in place, and every layout is   #
+# pinned as a synthetic fixture in test-manuscript-layouts.R. Run and      #
+# verified against the 60-submission random sample and a 150-article      #
+# corpus regression sample (see the PR for the measured numbers).          #
 ############################################################################
 
 # How good is a candidate parse? Used to choose between the tables in a
 # document, and between a column-segmented and a full-width reading of the
 # same page. Rewards arms with a known N and variables actually extracted;
 # penalises lines the parser had to skip.
+#
+# The three terms added 2026-08-20 (measured on the A&A submitted-manuscript
+# corpus) steer the choice toward the reading that kept labels and values
+# together. On a manuscript table the gutter detector can split the TABLE
+# itself - labels in one band, values in the other - and the values-only
+# band parses into nameless rows that used to outscore the full-width
+# reading. Demographic vocabulary in the row labels is direct evidence of a
+# baseline table; "Unnamed" rows and implausibly many arms are evidence of a
+# mangled one.
 .ppParseScore <- function(res) {
   if (is.null(res) || inherits(res, "error") || nrow(res$data) == 0) return(-Inf)
   contRows <- unique(res$data$ROW[!is.na(res$data$MEAN)])
   nCont    <- length(contRows)
-  nCat     <- length(setdiff(unique(res$data$ROW), contRows))
+  allRows  <- unique(res$data$ROW)
+  nCat     <- length(setdiff(allRows, contRows))
+  demo <- sum(grepl(paste0("(?i)\\bage\\b|\\bsex\\b|gender|\\bmale\\b|female|",
+                           "weight|height|\\bbmi\\b|body\\s+mass|\\basa\\b"),
+                    allRows, perl = TRUE))
+  clusters <- if (is.null(res$clusters)) nrow(res$arms) else res$clusters
   3 * sum(!is.na(res$arms$N)) +
     2 * nCont + nCat +
-    2 * (nrow(res$arms) >= 2) -
-    2 * nrow(res$skipped)
+    2 * (nrow(res$arms) >= 2) +
+    2 * min(demo, 3) -
+    2 * nrow(res$skipped) -
+    sum(grepl("^Unnamed", allRows)) -
+    max(0, clusters - 6)
 }
 
 # Parse one prepared block of lines, starting at the caption line `capIdx`.
@@ -93,6 +123,7 @@
   tokensByLine <- vector("list", length(lines))
   kind         <- rep("pre", length(lines))
   blankRun     <- 0
+  seenData     <- FALSE
   if (capIdx >= length(lines)) return(NULL)
   for (i in seq(capIdx + 1, length(lines))) {
     txt <- lineTexts[i]
@@ -114,16 +145,90 @@
     if (nrow(toks) > 0) {
       kind[i] <- "data"
       blankRun <- 0
+      seenData <- TRUE
     } else {
       kind[i] <- "label"
       blankRun <- blankRun + 1
-      # A long numberless line inside a column is prose, not a row label.
-      if (nrow(lines[[i]]) > 8 || blankRun >= 3) {
+      # A long numberless line inside a column is prose, not a row label -
+      # but only once data has begun. Before the first data line, the
+      # numberless lines are the caption's own legend sentences ("Values
+      # are represented as mean - SD or numbers (percentages)."), which
+      # manuscripts print between the caption and the table body; stopping
+      # on them cost whole tables (2026-08-20, A&A submission corpus).
+      if (seenData) {
+        if (nrow(lines[[i]]) > 8 || blankRun >= 3) {
+          kind[i] <- "stop"
+          break
+        }
+      } else if (blankRun >= 6) {
         kind[i] <- "stop"
         break
       }
     }
   }
+
+  # Some Word-converted manuscripts print the plus-minus sign as a plain
+  # hyphen: the caption says "mean - SD" and the cells read "40.79-11.97",
+  # which the tokenizer sees as a number followed by a negative number
+  # inside one word. When the block itself announces that notation, such
+  # contiguous pairs are re-read as mean +/- SD - but only on lines with at
+  # least TWO pairs, so a lone "(0-100 scale)" annotation cannot fabricate
+  # a baseline value (2026-08-20; compare the BJA plus-minus-as-dash repair
+  # in utils.R, which is this defect in the opposite direction).
+  dashSD <- any(grepl("(?i)mean\\s*[-\u2013\u2212]+\\s*s\\.?d\\b",
+                      lineTexts, perl = TRUE))
+  if (dashSD) for (i in which(kind == "data")) {
+    t <- tokensByLine[[i]]
+    if (is.null(t) || nrow(t) < 2) next
+    j <- seq_len(nrow(t) - 1)
+    pair <- j[t$type[j] == "plain" & t$type[j + 1] == "plain" &
+              t$start[j + 1] == t$start[j] + nchar(t$text[j]) &
+              !is.na(t$num1[j]) & t$num1[j] >= 0 &
+              !is.na(t$num1[j + 1]) & t$num1[j + 1] < 0]
+    if (length(pair) < 2) next
+    t$type[pair] <- "meanSD"
+    t$text[pair] <- paste0(t$text[pair], t$text[pair + 1])
+    t$num2[pair] <- -t$num1[pair + 1]
+    t$dec2[pair] <- t$dec1[pair + 1]
+    t$x1[pair]   <- t$x1[pair + 1]
+    t$mid[pair]  <- (t$x0[pair] + t$x1[pair]) / 2
+    tokensByLine[[i]] <- t[-(pair + 1), , drop = FALSE]
+  }
+  # ---- Manuscript-genre repairs (2026-08-20) -------------------------------
+  # Both patterns below were found on the A&A submitted-manuscript corpus;
+  # journal typography rarely produces either. See test-manuscript-layouts.R.
+  #
+  # (1) "Race, %   <0.001": a category header whose only numeric content is
+  #     p-value-shaped. Classified as data, it never becomes the category
+  #     header, so every child row beneath it is skipped as a bare number.
+  #     Reclassify it as a label line; its p-value goes with it.
+  for (i in which(kind == "data")) {
+    toks <- tokensByLine[[i]]
+    lbl  <- .ppSquish(substr(paste(lines[[i]]$text, collapse = " "),
+                             1, min(toks$start) - 1))
+    if (nchar(lbl) >= 4 &&
+        all(toks$type == "plain" & !is.na(toks$num1) & abs(toks$num1) < 1)) {
+      kind[i] <- "label"
+      lineTexts[i] <- lbl                 # the header text, minus its p-value
+      tokensByLine[[i]] <- toks[0, , drop = FALSE]
+    }
+  }
+  # (2) A numeric line ABOVE the (n = ...) header row - quintile bounds, a
+  #     year range, dose levels - is not data. Left as data, its tokens seed
+  #     the column clustering with x positions that belong to no arm, and
+  #     the arm count explodes. Reclassified as a label, its words can still
+  #     contribute to the arm names.
+  headerAt <- which(kind == "header")
+  if (length(headerAt) > 0 && headerAt[1] - capIdx <= 8) {
+    early <- which(kind == "data")
+    early <- early[early < headerAt[1]]
+    if (length(early) <= 3)
+      for (i in early) {
+        kind[i] <- "label"
+        tokensByLine[[i]] <- tokensByLine[[i]][0, , drop = FALSE]
+      }
+  }
+
   dataIdx <- which(kind == "data")
   if (length(dataIdx) == 0) return(NULL)
   firstData <- dataIdx[1]
@@ -136,8 +241,36 @@
   # ---- Header: arm names and arm N ----------------------------------------
   headerIdx <- which(kind %in% c("header", "label"))
   headerIdx <- headerIdx[headerIdx > capIdx & headerIdx < firstData]
+  # When a real header line exists, the label lines before it are the
+  # caption's legend sentences, not arm names - manuscripts print those
+  # between the caption and the table (2026-08-20).
+  headerAt <- which(kind == "header")
+  if (length(headerAt) > 0)
+    headerIdx <- headerIdx[headerIdx >= headerAt[1]]
   armN    <- rep(NA_integer_, cols$n)
   armName <- rep(NA_character_, cols$n)
+
+  # Arm N first, by character position: "(n= 19)" splits into two words, so
+  # per-column word bucketing can lose the digits. Matching the joined line
+  # and mapping the match back to word x positions - the tokenizer's own
+  # technique - is robust to how poppler split the cell (2026-08-20).
+  for (i in intersect(headerAt, seq(capIdx + 1, length(lines)))) {
+    d <- lines[[i]]
+    joined    <- paste(d$text, collapse = " ")
+    wordStart <- cumsum(c(1, nchar(d$text) + 1))[seq_len(nrow(d))]
+    wordEnd   <- wordStart + nchar(d$text) - 1
+    m <- gregexpr("(?i)n\\s*=\\s*\\d[\\d,]*", joined, perl = TRUE)[[1]]
+    if (m[1] == -1) next
+    for (k in seq_along(m)) {
+      s <- m[k]; e <- s + attr(m, "match.length")[k] - 1
+      wFirst <- which(wordEnd >= s)[1]
+      wLast  <- rev(which(wordStart <= e))[1]
+      xmid   <- (d$x[wFirst] + d$x[wLast] + d$width[wLast]) / 2
+      colk   <- cols$assign(xmid)
+      nval   <- suppressWarnings(as.integer(gsub("\\D", "", substr(joined, s, e))))
+      if (!is.na(nval) && is.na(armN[colk])) armN[colk] <- nval
+    }
+  }
   for (i in headerIdx) {
     d    <- lines[[i]]
     wMid <- d$x + d$width / 2
@@ -453,9 +586,23 @@
   skippedDf <- if (length(skipped) > 0) do.call(rbind, skipped) else
     data.frame(label = character(0), reason = character(0), text = character(0))
 
+  # An "arm" that received neither an N nor a single data cell is not an
+  # arm - it is a label-column word swept into the clustering (wide
+  # manuscript tables put header text far left of the first value column).
+  # Drop it from the report; no data line ever referenced it. The raw
+  # cluster count is kept for the parse score, where an implausible number
+  # of clusters is evidence of a mangled reading (2026-08-20).
+  used <- vapply(seq_len(nArms), function(j)
+    any(vapply(outRows, function(r)
+      length(r$perArm) >= j && !is.null(r$perArm[[j]]), logical(1))),
+    logical(1))
+  keep <- used | !is.na(armN[arms])
+  if (!any(keep)) keep <- rep(TRUE, nArms)
+
   list(data       = DATA,
-       arms       = data.frame(arm = armName[arms], N = armN[arms],
+       arms       = data.frame(arm = armName[arms][keep], N = armN[arms][keep],
                                stringsAsFactors = FALSE),
+       clusters   = nArms,
        skipped    = skippedDf,
        dispersion = dispersionBasis)
 }
@@ -558,6 +705,9 @@ parseBaselineTableHeuristics <- function(pdfFile,
 
   allPages <- if (isTRUE(ocr)) .ppOcrData(pdfFile, dpi = ocrDpi)
               else .ppPdfData(pdfFile)
+  # Submitted manuscripts number every line down the left margin; strip the
+  # rail before anything downstream sees it (2026-08-20, see pageLayout.R).
+  allPages <- lapply(allPages, .ppStripLineNumberRail)
   nWords   <- sum(vapply(allPages, nrow, integer(1)))
   if (length(allPages) == 0 || nWords == 0)
     stop("No text layer found in ", pdfFile,
@@ -575,6 +725,13 @@ parseBaselineTableHeuristics <- function(pdfFile,
                   single  = "single")
 
   cand <- list()
+  # Look-ahead bookkeeping (2026-08-20): a caption with no data beneath it -
+  # at the foot of a page, or on a caption-list page, both customary in
+  # submitted manuscripts - announces a table that lives on the NEXT page
+  # with no caption of its own. Such pages are recorded here and turned into
+  # full-width candidates below, each carrying its caption's score.
+  lookScore   <- list()
+  lookCaption <- list()
   for (p in pageIdx) {
     w <- allPages[[p]]
     if (is.null(w) || nrow(w) == 0) next
@@ -584,9 +741,12 @@ parseBaselineTableHeuristics <- function(pdfFile,
       if (mode == "columns" && nrow(bands) == 1 && "single" %in% modes) next
       for (b in seq_len(nrow(bands))) {
         bw <- .ppWordsInBand(w, bands[b, ])
-        if (nrow(bw) < 10) next
+        # The 4-word floor only serves the look-ahead: a caption-list page
+        # can be a handful of words, and its anchors must still be seen.
+        # Parseable candidates keep the original 10-word / 3-line floor.
+        if (nrow(bw) < 4) next
         lines <- .ppBuildLines(bw)
-        if (length(lines) < 3) next
+        if (length(lines) < 1) next
         lineTexts <- vapply(lines, .ppLineText, character(1))
         anchors <- .ppCaptionAnchors(bw)
         if (nrow(anchors) == 0) next
@@ -599,13 +759,43 @@ parseBaselineTableHeuristics <- function(pdfFile,
           # resort, so it is penalised rather than dropped.
           cs <- .ppCaptionScore(lineTexts[li]) -
             if (isTRUE(anchors$startsBlock[a])) 0 else 5
-          cand[[length(cand) + 1]] <- list(
-            page = p, mode = mode, band = b, lines = lines,
-            lineTexts = lineTexts, capIdx = li,
-            caption = lineTexts[li], capScore = cs)
+          if (nrow(bw) >= 10 && length(lines) >= 3)
+            cand[[length(cand) + 1]] <- list(
+              page = p, mode = mode, band = b, lines = lines,
+              lineTexts = lineTexts, capIdx = li,
+              caption = lineTexts[li], capScore = cs)
+          if (isTRUE(anchors$startsBlock[a]) && p < length(allPages)) {
+            # Fewer than two data-looking lines (two or more printed
+            # numbers) below the caption: the table is not on this page.
+            below <- if (li < length(lineTexts))
+              lineTexts[seq(li + 1, length(lineTexts))] else character(0)
+            dataish <- sum(vapply(below, function(t)
+              sum(gregexpr("[0-9]+", t)[[1]] > 0) >= 2, logical(1)))
+            key <- as.character(p + 1)
+            prev <- if (is.null(lookScore[[key]])) -Inf else lookScore[[key]]
+            if (dataish < 2 && cs > prev) {
+              lookScore[[key]]   <- cs
+              lookCaption[[key]] <- lineTexts[li]
+            }
+          }
         }
       }
     }
+  }
+
+  # Materialise the look-ahead candidates: the page after a data-less
+  # caption, read full width from its top (capIdx = 0 starts .ppParseBlock()
+  # at the first line).
+  for (key in names(lookScore)) {
+    p2 <- as.integer(key)
+    w2 <- allPages[[p2]]
+    if (is.null(w2) || nrow(w2) < 10) next
+    lines2 <- .ppBuildLines(w2)
+    if (length(lines2) < 2) next
+    cand[[length(cand) + 1]] <- list(
+      page = p2, mode = "single", band = 1, lines = lines2,
+      lineTexts = vapply(lines2, .ppLineText, character(1)),
+      capIdx = 0L, caption = lookCaption[[key]], capScore = lookScore[[key]])
   }
 
   # No caption anywhere: fall back to the old behaviour of scoring pages by
@@ -679,6 +869,47 @@ parseBaselineTableHeuristics <- function(pdfFile,
     stop("No usable baseline table could be parsed from ", pdfFile,
          ". Try the `pages` or `layout` argument, or ai = \"always\".")
 
+  # ---- Continuation onto following pages (2026-08-20) ----------------------
+  # Manuscript tables regularly run over the page break, with no repeated
+  # caption on the continuation page; the parse used to end at the bottom of
+  # the caption's page and silently lose the rest. A following page is
+  # appended when it opens with data-looking lines and no caption of its
+  # own, and the extension is kept only if the parse score improves - a page
+  # of prose adds skipped lines and lowers it.
+  # Only a full-width winner is extended: appending full-width lines to a
+  # column band would mix two different readings of the page, and journal
+  # two-column tables repeat their caption when they continue anyway.
+  bestPages <- bestCand$page
+  if (bestCand$mode == "single") {
+    extLines <- bestCand$lines
+    extTexts <- bestCand$lineTexts
+    p2 <- bestCand$page
+    while (p2 < length(allPages)) {
+      p2 <- p2 + 1
+      w2 <- allPages[[p2]]
+      if (is.null(w2) || nrow(w2) < 10) break
+      lines2 <- .ppBuildLines(w2)
+      if (length(lines2) < 2) break
+      lt2   <- vapply(lines2, .ppLineText, character(1))
+      head6 <- utils::head(lt2, 6)
+      nNum  <- vapply(head6, function(t)
+        sum(gregexpr("[0-9]+", t)[[1]] > 0), integer(1))
+      if (sum(nNum >= 2) < 2) break
+      if (any(grepl("(?i)^(table|tab\\.?)\\s+([0-9]{1,2}|[IVXLivxl]{1,4})\\b",
+                    utils::head(lt2, 3), perl = TRUE))) break
+      resExt <- tryCatch(
+        .ppParseBlock(c(extLines, lines2), c(extTexts, lt2), bestCand$capIdx,
+                      trial, parenIsSD, roundObsDelta,
+                      function(...) invisible(NULL)),
+        error = function(e) NULL)
+      if (.ppParseScore(resExt) <= .ppParseScore(best)) break
+      best      <- resExt
+      extLines  <- c(extLines, lines2)
+      extTexts  <- c(extTexts, lt2)
+      bestPages <- c(bestPages, p2)
+    }
+  }
+
   say("Table on page ", bestCand$page,
       if (bestCand$mode == "columns")
         paste0(" (column ", bestCand$band, ")") else " (full width)",
@@ -699,7 +930,7 @@ parseBaselineTableHeuristics <- function(pdfFile,
          provenance = data.frame(ROW = best$data$ROW,
                                  ENGINE = rep("heuristic", nrow(best$data)),
                                  stringsAsFactors = FALSE),
-         pages      = bestCand$page,
+         pages      = bestPages,
          caption    = bestCand$caption,
          trial      = trial,
          layout     = bestCand$mode,

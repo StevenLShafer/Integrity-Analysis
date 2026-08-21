@@ -87,7 +87,19 @@
 # plus-minus in it is then read as the dash it actually is.
 .ppPlusMinusIsDash <- function(txt) {
   if (!length(txt)) return(FALSE)
-  j   <- paste(txt, collapse = " ")
+  j <- paste(txt, collapse = " ")
+  # "mean±SD" written without surrounding spaces is NOTATION, not a dash.
+  # An A&A submission wrote it that way twice, the two letter-contacts
+  # counted as proof, and every genuine plus-minus in its table was then
+  # rewritten to a hyphen - twenty real mean/SD cells destroyed by a repair
+  # aimed at a different journal's font. Notation contexts are discounted
+  # before the evidence is counted (2026-08-20). The \b on sd/sem/se keeps
+  # "non±selective" - a true dash in a hyphenated word - as evidence.
+  j <- gsub(paste0("(?i)\\b(means?|medians?)\\s*", .ppPLUSMINUS), " ", j,
+            perl = TRUE)
+  j <- gsub(paste0("(?i)", .ppPLUSMINUS,
+                   "\\s*((sd|sem|se)\\b|s\\.d\\.|s\\.e\\.m?\\.)"), " ", j,
+            perl = TRUE)
   pat <- paste0("[A-Za-z]", .ppPLUSMINUS, "|", .ppPLUSMINUS, "[A-Za-z]")
   m   <- gregexpr(pat, j)[[1]]
   if (m[1] == -1) return(FALSE)

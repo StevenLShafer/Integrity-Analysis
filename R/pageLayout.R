@@ -104,6 +104,46 @@
 }
 
 # ---------------------------------------------------------------------------
+# Margin line-number rails (submitted manuscripts)
+# ---------------------------------------------------------------------------
+# FIX (2026-08-20, measured on the A&A submitted-manuscript corpus):
+# manuscripts under review number every line down the left margin. To the
+# parser those numbers are a column of bare integers: they make prose lines
+# look like data rows, and they seed the column clustering with an x
+# position that belongs to no treatment arm. The rail is recognised - a run
+# of small integers, left of essentially all other text, spanning most of
+# the page, counting upward in small steps - and removed at the point of
+# reading.
+#
+# The guards matter more than the detection. A "Patient no." column inside a
+# table is also ascending integers, but it sits to the RIGHT of the row
+# labels, so the "left of the 10th percentile of everything else" test
+# excludes it; a page number or section number is a lone integer, not eight
+# of them in a vertical run; and a column of counts in a table is neither
+# ascending nor tall enough to span half the page.
+.ppStripLineNumberRail <- function(pageWords) {
+  if (is.null(pageWords) || nrow(pageWords) < 20) return(pageWords)
+  isInt <- grepl("^\\d{1,4}$", pageWords$text)
+  if (sum(isInt) < 8) return(pageWords)
+  others <- pageWords[!isInt, , drop = FALSE]
+  if (nrow(others) < 10) return(pageWords)
+  textLeft <- stats::quantile(others$x, 0.10, names = FALSE)
+  mid  <- pageWords$x + pageWords$width / 2
+  rail <- isInt & mid < (textLeft - 6)
+  if (sum(rail) < 8) return(pageWords)
+  ys <- pageWords$y[rail]
+  if (diff(range(ys)) < 0.5 * diff(range(pageWords$y))) return(pageWords)
+  v  <- as.integer(pageWords$text[rail][order(ys)])
+  dv <- diff(v)
+  # Ascending by a small step: 1 for every-line numbering, up to 5 for
+  # every-fifth-line numbering. The 0.7 threshold tolerates one mid-page
+  # reset (continuous numbering restarting) without letting a column of
+  # table counts - whose differences are effectively random - through.
+  if (length(dv) == 0 || mean(dv %in% 1:5) < 0.7) return(pageWords)
+  pageWords[!rail, , drop = FALSE]
+}
+
+# ---------------------------------------------------------------------------
 # Table captions: "Table 1", "TABLE I", "Tab. 2"
 # ---------------------------------------------------------------------------
 # Numbering style varies by journal - Anaesthesia and CJA print Roman
