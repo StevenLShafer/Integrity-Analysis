@@ -138,6 +138,45 @@ Cell shapes recognised (`tokenize.R`):
 and `63.0` has 1. That distinction is data — it tells the Monte Carlo analysis how much of a
 discrepancy rounding alone can explain.
 
+### 05b — Submitted manuscripts (2026-08-20)
+
+The deployed app screens **submissions, not published articles**, and submissions defeat
+journal-tuned heuristics in their own ways. Screening 654 RCT submissions from the A&A
+manuscript corpus found five, each now repaired and pinned as a synthetic fixture in
+`test-manuscript-layouts.R`:
+
+1. **Margin line-number rails.** Manuscripts number every line; those integers read as a column
+   of bare numbers. `.ppStripLineNumberRail()` (pageLayout.R) removes a run of small ascending
+   integers left of essentially all other text at the point of reading.
+2. **Legend sentences between the caption and the table.** "Values are represented as mean ± SD
+   or numbers (percentages)." used to trip the sustained-prose stop before any data was seen.
+   Numberless lines are now tolerated until the first data line.
+3. **Captions physically separated from their table** — a caption-list page, or a caption at the
+   foot of the previous page. A caption with fewer than two data-looking lines beneath it now
+   also queues a full-width *look-ahead candidate* for the following page, carrying the
+   caption's score.
+4. **Tables running over the page break** with no repeated caption. The winning full-width parse
+   is extended onto following pages while they open with data-looking lines and the parse score
+   improves.
+5. **The gutter detector splitting a wide Word table** into a labels band and a values band. The
+   values-only band used to win on parse score with nameless rows; the score now rewards
+   demographic vocabulary in row labels and penalises "Unnamed" rows and implausibly many
+   columns, so the full-width reading wins.
+
+Two notation repairs came out of the same corpus: `mean±SD` written without spaces no longer
+counts as evidence for the BJA dash-for-± rewrite (which was destroying every real `±` in the
+document), and a block whose legend announces `mean - SD` with a plain hyphen has contiguous
+`40.79-11.97` pairs re-read as mean ± SD — only on lines with at least two such pairs, so a lone
+"(0–100 scale)" annotation cannot fabricate a value.
+
+Measured on a seeded 60-submission random sample (deterministic engine only): template lines
+475 → 1,116, mean/SD variables 95 → 254, arms with a known N 17 → 80. The same changes improved
+the published-article corpus sample (n = 150): 102 → 117 articles yielding a table. What remains
+out of deterministic reach on submissions: tables absent from the PDF (referenced but never
+included in the build), percent-only tables with no counts, and fonts that drop the ± glyph so
+mean and SD fuse into one number ("47.714.9") — splitting those would be fabrication, not
+extraction.
+
 ### 08 — The AI fallback
 
 Reached only when `reviewFlags()` is non-empty and `ai != "never"`. Two sources:

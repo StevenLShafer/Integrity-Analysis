@@ -274,6 +274,25 @@
     <p><code>ROUND_MEAN</code> is read from the printed glyphs, never inferred from the value:
     <code>63</code> has 0 decimals and <code>63.0</code> has 1. That distinction is data — it
     tells the Monte Carlo analysis how much of a discrepancy rounding alone can explain.</p>
+
+    <h3>Submitted manuscripts (2026-08-20)</h3>
+    <p>The deployed app screens <strong>submissions, not published articles</strong>. Screening
+    654 RCT submissions from the A&amp;A manuscript corpus found five manuscript-specific
+    defeats, each repaired and pinned as a synthetic fixture in
+    <code>test-manuscript-layouts.R</code>: margin line-number rails
+    (<code>.ppStripLineNumberRail()</code>); legend sentences between the caption and the table
+    (tolerated until the first data line); captions physically separated from their table (a
+    data-less caption queues a full-width <em>look-ahead candidate</em> for the next page);
+    tables running over the page break (the winning full-width parse extends while the score
+    improves); and the gutter detector splitting a wide Word table into a labels band and a
+    values band (the score now rewards demographic row labels and penalises nameless rows, so
+    the full-width reading wins). Two notation repairs came with them: <code>mean±SD</code>
+    written without spaces no longer counts as evidence for the dash-for-± rewrite, and a block
+    whose legend announces <code>mean - SD</code> has contiguous <code>40.79-11.97</code> pairs
+    re-read as mean&nbsp;±&nbsp;SD, only on lines with two or more such pairs. Measured on a
+    seeded 60-submission sample: template lines 475&nbsp;→&nbsp;1,116, mean/SD variables
+    95&nbsp;→&nbsp;254, arms with a known N 17&nbsp;→&nbsp;80; the 150-article published-corpus
+    sample improved from 102 to 117 articles yielding a table.</p>
   </div>
 </section>
 
