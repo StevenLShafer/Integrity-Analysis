@@ -98,11 +98,16 @@
   # weight in choosing between candidate tables.
   headerN <- if (is.null(res$armNSource)) !is.na(res$arms$N) else
     !is.na(res$arms$N) & is.na(res$armNSource)
+  # A row refused by the unique-count bracket ("47%" of n = 702) is a
+  # CORRECT reading of a percent table, not evidence of a mangled parse -
+  # penalising it like a parse error flipped candidate selection on two
+  # corpus files (2026-08-21). Only the other skips count against a parse.
+  hardSkips <- sum(!grepl("unique count", res$skipped$reason, fixed = TRUE))
   3 * sum(headerN) +
     2 * nCont + nCat +
     2 * (nrow(res$arms) >= 2) +
     2 * min(demo, 3) -
-    2 * nrow(res$skipped) -
+    2 * hardSkips -
     sum(grepl("^Unnamed", allRows)) -
     max(0, clusters - 6)
 }
@@ -426,8 +431,10 @@
   outRows      <- list()
   skipped      <- list()
   catHeader    <- NA_character_
+  catHeaderPct <- FALSE        # did the category header announce percentages?
   catColumns   <- character(0)
   usedRowNames <- character(0)
+  pctDerived   <- character(0) # rows whose counts were derived from percents
 
   addSkip <- function(label, reason, txt)
     skipped[[length(skipped) + 1]] <<-
@@ -437,7 +444,12 @@
   for (i in seq(firstData, lastData)) {
     if (kind[i] == "label") {
       lbl <- .ppCleanLabel(lineTexts[i])
-      if (nchar(lbl) > 0 && nrow(lines[[i]]) <= 6) catHeader <- lbl
+      if (nchar(lbl) > 0 && nrow(lines[[i]]) <= 6) {
+        catHeader <- lbl
+        # "Race, %" / "ASA status, %": the children below are percentages
+        catHeaderPct <- grepl("%", lineTexts[i], fixed = TRUE) ||
+          grepl("(?i)\\bpercent", lineTexts[i], perl = TRUE)
+      }
       next
     }
     if (kind[i] != "data") next
@@ -469,9 +481,54 @@
       addSkip(label, "median [range/IQR] - integrity analysis needs mean and SD", txt)
       next
     }
-    if (mainType == "pctOnly") {
-      addSkip(label, "percent only, no count - enter by hand if arm N is known", txt)
-      next
+    # ---- Percent-block conversion (2026-08-21) ----------------------------
+    # Three genres tabulate categorical data as bare percentages, found by
+    # the AI comparison over the 654-submission corpus (~800 rows skipped):
+    #   "Male 55%"                  - pctOnly cells
+    #   "Race, %" then "Caucasian 47" - plain children under a % header
+    #   "Gender (Male), % 47 44"    - a plain row whose own label says %
+    # With a known arm N the printed percentage pins the count to the
+    # integers consistent with its rounding (.ppCountFromPct); a cell is
+    # converted ONLY when that bracket holds exactly one integer, so "47%"
+    # of n = 40 becomes 19 while "47%" of n = 702 stays unconverted - a
+    # fraud screen must not analyze approximated counts as printed ones.
+    # Every converted row is recorded and reported by reviewFlags().
+    rowSaysPct <- grepl("%", rawLabel, fixed = TRUE) ||
+      grepl("(?i)\\bpercent", rawLabel, perl = TRUE)
+    pctGenre <- mainType == "pctOnly" ||
+      (mainType == "plain" &&
+         ((!is.na(catHeader) && catHeaderPct) || rowSaysPct))
+    if (pctGenre) {
+      cnts <- vapply(seq_len(nArms), function(j) {
+        t <- armTok[[j]]
+        if (is.null(t) || !t$type %in% c("pctOnly", "plain"))
+          return(NA_integer_)
+        .ppCountFromPct(t$num1, t$dec1, armN[arms[j]])
+      }, integer(1))
+      present <- !vapply(armTok, is.null, logical(1))
+      if (any(present) && !any(is.na(cnts[present]))) {
+        for (j in which(present)) {
+          armTok[[j]]$num1 <- cnts[j]
+          armTok[[j]]$type <- "plain"
+        }
+        # The "%" in the label described the notation just converted
+        # away; drop it so the category column is named "Diabetes", not
+        # "Diabetes, %".
+        label <- .ppCleanLabel(sub(
+          "(?i)\\s*[,;]?\\s*\\(?\\s*(%|percent(age)?s?)\\s*\\)?\\s*$",
+          "", label, perl = TRUE))
+        pctDerived <- c(pctDerived,
+                        if (nchar(label) > 0) label else catHeader)
+        # Children of a category header accumulate into its row as counts;
+        # a standalone percent row is a binary category with a complement,
+        # exactly like a printed "n (%)" cell.
+        mainType <- if (!is.na(catHeader)) "plain" else "nPct"
+      } else {
+        addSkip(if (nchar(label) > 0) label else txt,
+                paste("percent only - needs the arm N, and the printed",
+                      "percent must pin a unique count; enter by hand"), txt)
+        next
+      }
     }
 
     if (mainType == "numParen") {
@@ -497,6 +554,7 @@
                                usedRowNames)
       usedRowNames <- c(usedRowNames, rowName)
       catHeader <- NA_character_
+      catHeaderPct <- FALSE
       # A row label may override the table-level footnote: "Age, mean (SEM)"
       rowSaysSE <- grepl(seWord, rawLabel, perl = TRUE)
       rowSaysSD <- grepl("(?i)\\bs\\.?d\\.?\\b|standard\\s+deviation",
@@ -520,6 +578,7 @@
 
     } else if (mainType == "fraction") {
       catHeader <- NA_character_
+      catHeaderPct <- FALSE
       nParts <- max(vapply(armTok, function(t)
         if (is.null(t)) 0L else length(strsplit(t$text, "/")[[1]]), integer(1)))
       partNames <- NULL
@@ -566,6 +625,7 @@
 
     } else if (mainType == "nPct") {
       catHeader <- NA_character_
+      catHeaderPct <- FALSE
       catName <- .ppUniqueName(if (nchar(label) > 0) label else "Category",
                                catColumns)
       complementName <- .ppUniqueName(paste("Not", catName),
@@ -668,6 +728,7 @@
        arms       = data.frame(arm = armName[arms][keep], N = armN[arms][keep],
                                stringsAsFactors = FALSE),
        armNSource = armNSource[arms][keep],
+       derivedCounts = unique(pctDerived),
        clusters   = nArms,
        skipped    = skippedDf,
        dispersion = dispersionBasis)
@@ -1012,6 +1073,7 @@ parseBaselineTableHeuristics <- function(pdfFile,
          layout     = bestCand$mode,
          dispersion = best$dispersion,
          armNSource = best$armNSource,
+         derivedCounts = best$derivedCounts,
          engine     = "heuristic"),
     class = "ParsePDFTable")
 }

@@ -69,6 +69,25 @@
   if (!is.null(feas) && length(feas) == 1) feas else NA_integer_
 }
 
+# The reverse bracket, for percent-block category tables (2026-08-21): given
+# the arm size, which count was printed as `pct`%? The printed rounding
+# brackets it - count/N must round to pct at `dec` decimals - and the count
+# is accepted only when exactly ONE integer lies in the bracket. "47%" of
+# n = 40 pins 19; "47%" of n = 702 spans 327..333 and is refused, because a
+# fraud screen must not analyze approximated counts as if they were printed.
+.ppCountFromPct <- function(pct, dec, N) {
+  if (is.na(pct) || is.na(N) || N <= 0 || pct < 0 || pct > 100)
+    return(NA_integer_)
+  if (is.na(dec)) dec <- 0L
+  half <- 0.5 * 10^(-dec)
+  cLo <- as.integer(ceiling(N * (pct - half) / 100 - 1e-9))
+  cHi <- as.integer(floor(N * (pct + half) / 100 + 1e-9))
+  cLo <- max(cLo, 0L)
+  cHi <- min(cHi, as.integer(N))
+  if (cHi != cLo) return(NA_integer_)
+  cLo
+}
+
 # --------------------------------------------------------------------------
 # Source 2: the document text (CONSORT labels, randomization sentences)
 # --------------------------------------------------------------------------
