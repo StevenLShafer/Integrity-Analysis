@@ -63,7 +63,7 @@ jobs:
               cat(nm, "does not exist - nothing to purge\n")
               quit(status = 0)
             }
-            for (attempt in 1:5) {
+            for (attempt in 1:10) {
               ok <- tryCatch({
                 rsconnect::terminateApp(appName = nm, account = acct,
                                         server = "shinyapps.io")
@@ -75,10 +75,10 @@ jobs:
                 FALSE
               })
               if (ok || !exists()) break
-              Sys.sleep(60)   # outlast the concurrent production deploy
+              Sys.sleep(90)   # a PR app mid-deploy 409s until ITS OWN build finishes (~10 min)
             }
             if (exists()) {
-              cat("FAILED:", nm, "still exists after 5 attempts\n")
+              cat("FAILED:", nm, "still exists after 10 attempts\n")
               quit(status = 1)
             }
             cat(nm, "terminated and purged\n")'
