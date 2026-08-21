@@ -61,6 +61,16 @@ jobs:
 
       - uses: r-lib/actions/setup-renv@v2
 
+      - name: Rebuild Rfast from source (RSPM binary/TBB ABI mismatch)
+        # The prebuilt Linux Rfast binary fails to load - undefined TBB
+        # symbol against the restored RcppParallel. A source build links
+        # RcppParallel's own TBB correctly. renv caches the result, so
+        # this compiles once per lockfile, not once per run.
+        run: |
+          Rscript -e 'options(pkgType = "source");
+                      renv::install("Rfast@2.1.5.2", rebuild = TRUE, prompt = FALSE)'
+
+
       - name: Dev tooling (floating - not part of the runtime lockfile)
         run: Rscript -e 'install.packages(c("rcmdcheck", "testthat", "pkgload"))'
 
