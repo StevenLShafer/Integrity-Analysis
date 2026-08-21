@@ -53,6 +53,15 @@ reviewFlags <- function(x) {
                                "CONSORT flow diagram: ",
                                paste(src[fromText], collapse = " | ")))
   }
+  # Counts converted from printed percentages are usable but derived: the
+  # percentage and the arm N pinned a unique integer, but no count is
+  # printed on the page. Say which rows, so a human can check them
+  # (2026-08-21, the percent-block conversion).
+  if (!is.null(x$derivedCounts) && length(x$derivedCounts) > 0)
+    flags <- c(flags, paste0(length(x$derivedCounts), " category row(s) ",
+                             "converted from printed percentages via the ",
+                             "arm N (unique-count bracket): ",
+                             paste(x$derivedCounts, collapse = ", ")))
   disp <- if ("SE" %in% names(x$data))
     !is.na(x$data$SD) | !is.na(x$data$SE) else !is.na(x$data$SD)
   cont <- !is.na(x$data$MEAN) | disp

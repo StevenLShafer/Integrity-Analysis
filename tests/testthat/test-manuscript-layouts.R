@@ -92,14 +92,14 @@ pValueHeaderPdf <- function(dir = tempdir()) {
     list(list(x = 72, y = 80,
               text = "Table 1. Demographics and baseline characteristics", adj = 0)),
     c(list(list(x = 72,     y = 110, text = "Variable", adj = 0)),
-      list(list(x = vx[1],  y = 110, text = "(N = 702)", adj = 0.5)),
-      list(list(x = vx[2],  y = 110, text = "(N = 709)", adj = 0.5)),
+      list(list(x = vx[1],  y = 110, text = "(N = 20)", adj = 0.5)),
+      list(list(x = vx[2],  y = 110, text = "(N = 25)", adj = 0.5)),
       list(list(x = 480,    y = 110, text = "P",         adj = 0.5))),
     rowCells(140, "Age, yr", c("55 \u00b1 15", "57 \u00b1 15", "<0.001"), vx),
     rowCells(166, "Race, %", c("", "", "<0.001"), vx),
-    rowCells(192, "Caucasian",        c("47", "44"), vx[1:2], labelX = 86),
-    rowCells(218, "African American", c("33", "20"), vx[1:2], labelX = 86),
-    rowCells(244, "Others",           c("20", "36"), vx[1:2], labelX = 86))
+    rowCells(192, "Caucasian",        c("45", "40"), vx[1:2], labelX = 86),
+    rowCells(218, "African American", c("35", "40"), vx[1:2], labelX = 86),
+    rowCells(244, "Others",           c("20", "20"), vx[1:2], labelX = 86))
   makeTablePdf(f, cells)
 }
 
@@ -110,7 +110,9 @@ test_that("a category header line carrying only a p-value keeps its children", {
   expect_true("Caucasian" %in% names(d))
   race <- d[grepl("^Race", d$ROW), ]
   expect_equal(nrow(race), 2)          # one line per arm
-  expect_equal(race$Caucasian, c(47, 44))
+  # the header says "%", so the children are percentages: 45% of 20 is 9,
+  # 40% of 25 is 10 (see test-percent-block.R for the conversion itself)
+  expect_equal(race$Caucasian, c(9, 10))
 })
 
 # --------------------------------------------------------------------------
