@@ -135,6 +135,27 @@ the lockfile pins everything those values depend on.
   tests are the arbiter; if an upgrade moves the pinned Monte Carlo
   values, re-pin them and say so in the commit), snapshot, PR.
 
+## Working alongside other sessions
+
+Multiple Claude sessions work this repository (proven 2026-08-21). The
+standing rules, each learned from a real incident:
+
+- **Unpushed work does not exist** (2026-08-16: a local branch was
+  destroyed by a concurrent merge). Push immediately after committing.
+- **The shared user library is nobody's**: this repo's sessions run on
+  the renv project library, and batch jobs should use a private library
+  from a git worktree (the 2026-08-21 install race invalidated a
+  peer's measurements mid-run when the user library changed under it).
+- **Do not switch branches in C:/dev/IntegrityAnalysis while a
+  detached run launched from it is still loading** - long jobs load
+  code once at start and are immune afterwards.
+- **Check for peers before assuming a PR, branch, or push is yours** -
+  `gh pr list` surprises happen (PRs 51/53 arrived from a parallel
+  session mid-day). Cross-session messages can be exchanged with the
+  SendMessage tool when coordination is needed.
+- Long-running work in flight is recorded in ISSUES.md "Where things
+  stand" with its log path - read that section FIRST in a new session.
+
 ## Security
 
 Security must be assured before anything deploys (Steve's requirement,
