@@ -114,7 +114,18 @@ fraud screening during peer review.
 
 ## 3. Validate the analysis against Carlisle's 2017 manuscript
 
-**Status 2026-08-21, RUN IN FLIGHT.** Corrected archaeology: the full
+**FULL RUN COMPLETE (2026-08-21, 57.8 min): the current shipped engine
+reproduces Carlisle 2017.** All 5,080 trials joined, zero refused:
+r = 0.9930, median |diff| = 0.0127, 90.3% within 0.05, alarm
+concordance (p < 0.05 both ways) 99.0%; 39 his-p=1 z=+inf artifact
+trials reported separately. Against the 2026-08-17 lost-scratchpad
+benchmark (r = 0.991, concordance 97.4%): equal or better where it
+matters. REMAINING: adjudicate the 121 outliers (|diff| > 0.10; 50 of
+them disagree on the p < 0.05 alarm) - results and per-trial values in
+`.NewCarlisle/validation2017/results.csv`; the worst five are recorded
+in the results file (e.g. NEJM 670: ours 0.129 vs his 0.634).
+
+Prior status for context (now historical): Corrected archaeology: the full
 validation ALREADY RAN once, 2026-08-17, in a session scratchpad -
 5,080 trials, r = 0.991, median |diff| 0.0095, 92% within 0.05,
 alarm-zone concordance 97.4% - but its scripts were never committed
