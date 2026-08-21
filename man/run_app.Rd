@@ -4,7 +4,7 @@
 \alias{run_app}
 \title{Launch the Integrity Analysis Shiny app}
 \usage{
-run_app(testNote = NULL)
+run_app(testNote = NULL, countUsage = is.null(testNote))
 }
 \arguments{
 \item{testNote}{optional single string shown as a prominent banner under
@@ -12,6 +12,11 @@ the header, naming the PR under test and what to look at (e.g.
 \code{"PR #6: function extraction - exercise upload, validate, analyze"}).
 PR test deployments (\verb{IntegrityAnalysis_PR_<n>}) deploy an \code{app.R} that
 passes this; production passes nothing and shows no banner.}
+
+\item{countUsage}{count anonymous usage events (session starts and
+analyses run) to Steve's GoatCounter? Defaults to TRUE only when
+there is no \code{testNote}, i.e. production. See R/usageCount.R for
+the privacy design (the user's IP never reaches the counter).}
 }
 \description{
 Launch the Integrity Analysis Shiny app

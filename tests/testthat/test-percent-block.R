@@ -60,6 +60,50 @@ test_that("all three percent genres convert to counts", {
   expect_true(any(grepl("converted from printed percentages", flags)))
 })
 
+test_that("derived cells are recorded for the grid, with their notes", {
+  res <- parseBaselineTableHeuristics(percentBlockPdf(), trial = "T",
+                                      quiet = TRUE)
+  dc <- res$derivedCells
+  expect_false(is.null(dc))
+  expect_true(all(c("ROW", "COL", "KIND", "NOTE") %in% names(dc)))
+  expect_true(all(dc$KIND == "unique"))
+  # the binary row records both the count column and its complement
+  expect_true(any(dc$COL == "Male sex"))
+  expect_true(any(dc$COL == "Not Male sex"))
+  expect_true(any(grepl("uniquely pinned", dc$NOTE)))
+})
+
+test_that("pctApprox = TRUE converts what the bracket cannot pin", {
+  f  <- file.path(tempdir(), "pctapprox.pdf")
+  vx <- c(300, 420)
+  cells <- c(
+    list(list(x = 72, y = 80,
+              text = "Table 1. Baseline patient characteristics", adj = 0)),
+    rowCells(110, "", c("Drug", "Placebo"), vx),
+    rowCells(136, "", c("(n = 702)", "(n = 695)"), vx),
+    rowCells(164, "Age (yr)",     c("55 ± 15", "61 ± 15"), vx),
+    rowCells(190, "Male sex, %",  c("47",      "44"),      vx))
+  makeTablePdf(f, cells)
+
+  # off by default: refused (pinned by the earlier test); on: approximated
+  res <- parseBaselineTableHeuristics(f, trial = "T", quiet = TRUE,
+                                      pctApprox = TRUE)
+  male <- res$data[grepl("^Male", res$data$ROW), ]
+  expect_equal(male[["Male sex"]], c(round(702 * .47), round(695 * .44)))
+  expect_equal(male[["Not Male sex"]], c(702 - 330, 695 - 306))
+  expect_true("Male sex" %in% res$approxCounts)
+  expect_true(any(res$derivedCells$KIND == "approximate"))
+  expect_true(any(grepl("APPROXIMATE", res$derivedCells$NOTE)))
+  flags <- reviewFlags(res)
+  expect_true(any(grepl("APPROXIMATE counts", flags)))
+
+  # exact conversions must never silently become approximations
+  res2 <- parseBaselineTableHeuristics(percentBlockPdf(), trial = "T",
+                                       quiet = TRUE, pctApprox = TRUE)
+  expect_length(res2$approxCounts, 0)
+  expect_true(all(res2$derivedCells$KIND == "unique"))
+})
+
 test_that("a percent that does not pin a unique count is refused", {
   f  <- file.path(tempdir(), "pctbig.pdf")
   vx <- c(300, 420)
