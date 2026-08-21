@@ -68,6 +68,15 @@ jobs:
       # and shinyapps.io then installs - are the locked ones. The
       # deploy TOOLS (rsconnect, remotes) float; they are couriers,
       # not cargo.
+      - name: System libraries (ubuntu)
+        # setup-r-dependencies used to install these automatically from
+        # SystemRequirements via pak; setup-renv does not, and RSPM
+        # binaries install fine but fail to LOAD without them (found:
+        # pdftools "required" errors = libpoppler-cpp missing).
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends             libpoppler-cpp-dev libcurl4-openssl-dev libssl-dev             libxml2-dev libfontconfig1-dev libfreetype6-dev             libharfbuzz-dev libfribidi-dev libpng-dev libjpeg-dev             libtiff5-dev libcairo2-dev
+
       - uses: r-lib/actions/setup-renv@v2
 
       - name: Deploy tooling (floating)
