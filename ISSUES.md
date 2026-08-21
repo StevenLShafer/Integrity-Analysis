@@ -6,43 +6,53 @@ the bottom rather than being deleted, so the reasoning survives.
 
 ---
 
-## Where things stand — 2026-08-20
+## Where things stand — 2026-08-21 (session handoff)
 
-The app is a deployed R package with a gated pipeline: every PR runs the
-553-assertion suite plus the security tripwire inside R CMD check, a
-preview app deploys per PR, and production deploys only after the checks
-pass on main, at the exact tested commit (`deploy-production.yaml`,
-2026-08-20). Production: https://steveshafer.shinyapps.io/IntegrityAnalysis/,
-fronted by https://integrityanalysis.io with the user guide at /guide.html.
+**A full Carlisle-2017 validation run is IN FLIGHT**, launched detached
+2026-08-21 morning (survives every session): the shipped engine over
+all 5,080 One Sheet trials at mMax = 100,000, via the committed runner
+`corpus/validateCarlisle2017.R`. Its 100-trial pilot gate PASSED first:
+r = 0.9930 vs Carlisle's stored p-values, median |diff| 0.0164, alarm
+concordance 99.0%, nothing refused. Progress:
+`.NewCarlisle/validation2017/run.log` (a stats block prints at the
+end); results accumulate in `results.csv` every 25 trials; if the
+machine restarts, rerun `Rscript corpus/validateCarlisle2017.R` - done
+trials are skipped. NEXT SESSION: read the stats block, record it in
+issue 3, and adjudicate the outliers (|diff| > 0.10; ~112 expected
+from the 2026-08-17 run, plus ~12 known his-p=1 artifacts).
 
-Shipped and closed as issues: one-sided p toward homogeneity with the
-adaptive staged Monte Carlo (6), the ParsePDF fold-in (9), the package
-restructure and deploy trio (10), color-coded grid cells (13), HTML
-documentation (14), the journal-style baseline view (15), and the
-distribution-graphs PowerPoint (16). Beyond the numbered issues: the
-editable grid, multi-file and appending uploads, zipped upload of a
-whole analysis, the purge guarantee, the three-tab results workbook with
-an overall Stouffer P, anonymous usage counting, and a full security
-review (threat model in AGENTS.md "Security"; the adversary is the
-manuscript's author).
+**A parallel session is active in this repository** (ParsePDF glyph
+work): PR #53 is OPEN and theirs; branch symbol-pua-and-dash-evidence;
+worktree C:/Temp/ia-glyphs and private library C:/Temp/ia-lib are
+THEIRS - do not touch. Their branch predates renv and the cleanup fix;
+both reconcile when they merge main. See AGENTS.md "Working alongside
+other sessions".
 
-Corpus work (see corpus/README.md and the memory of the download
-strategy): the Carlisle acquisition pipeline is built - every legal
-automated route is exhausted, and a prioritized manual queue plus a
-filing loop (`.NewCarlisle/inbox` -> fileDownloads.R) is Steve's
-handful-a-day workflow. The Boldt and Fujii fraud corpora are resolved
-to PMIDs with their own worklists; both are 100% manual.
+**The pipeline is fully mechanized and verified end to end** (all on
+main): every PR runs the 586-passing-assertion suite + security
+tripwire inside R CMD check on the renv-pinned environment (R 4.5.3,
+121 runtime packages, lockfile refresh policy in AGENTS.md "renv");
+production deploys only after R-CMD-check passes, at the tested SHA,
+from a staged directory; preview apps purge on PR close with 15-minute
+retries that fail red; the CRAN canary checks latest-everything every
+Monday.
 
-Open: the API (1), the Carlisle-2017 full validation (3, waiting on the
-tie-convention decision), Monte Carlo optimisation (5, staging landed,
-parallelism remains), the survey of other screens (7), AI parsing in
-deployment (8, direction now publisher-supplied keys), live UI feedback
-during long runs (11), and median/IQR validation (12).
+**The app** (production, deployed): five ways in including zipped
+multi-file upload; editable validated grid with issue colors; adaptive
+one-sided Monte Carlo; three-tab results workbook with an overall
+Stouffer P; optional PowerPoint of actual-vs-expected distribution
+graphs (Graph results checkbox). Security threat model and standing
+conclusions in AGENTS.md "Security".
 
-(The 2026-08-16 ParsePDF handoff that previously stood here - corpus
-verification numbers, deliverables on C:/temp, the unpushed-work lesson -
-is preserved in git history at tag-time of that date.)
----
+**Corpus efforts** (see corpus/README.md and the project memories):
+Carlisle manual queue ~3,500 trials with a daily filing loop
+(.NewCarlisle/inbox -> fileDownloads.R); Boldt (104 queued) and Fujii
+(185) worklists built, both 100% manual - every legal automated route
+is exhausted and the reasoning recorded.
+
+**Open issues:** 1 (API), 3 (validation - in flight above), 5 (MC
+parallelism; pairs with 11), 7 (survey), 8 (AI in deployment - BYOK
+direction), 11 (live analysis feedback), 12 (median/IQR validation).
 
 ## 1. Build the API
 
@@ -104,13 +114,26 @@ fraud screening during peer review.
 
 ## 3. Validate the analysis against Carlisle's 2017 manuscript
 
-**Status 2026-08-20, DECISION MADE:** the pilot is done - r = 0.991
-against Carlisle's values, with the differences explained (his are
-mid-p, folded at 0.5). Steve adopted **mid-p for ties** (2026-08-20),
-which is also what the app has computed since the 2026-08-17 one-sided
-implementation - so the app and the comparison now share one
-convention, matching Carlisle's own. The full 5,088-trial run is
-UNBLOCKED; the journal-name lookup that joins his sheets is built.
+**Status 2026-08-21, RUN IN FLIGHT.** Corrected archaeology: the full
+validation ALREADY RAN once, 2026-08-17, in a session scratchpad -
+5,080 trials, r = 0.991, median |diff| 0.0095, 92% within 0.05,
+alarm-zone concordance 97.4% - but its scripts were never committed
+and the engine has since gained the adaptive staged scheme. Steve
+ratified mid-p for ties (2026-08-20; already the app's convention).
+
+The validation is now a COMMITTED, reproducible artifact:
+`corpus/validateCarlisle2017.R` (pilot mode: 100 seeded trials at
+m = 15,000; full mode: every trial at m = 100,000; resumable via
+`.NewCarlisle/validation2017/results.csv` - rerunning skips done
+trials). It reads the One Sheet raw rows through validateData()'s
+native Carlisle aliases and joins to the repaired wide file by
+journal + trial with the A&A >= 1235 numbering offset. The full run
+was launched detached overnight 2026-08-21; check
+`.NewCarlisle/validation2017/run.log` for progress and the final
+stats block. REMAINING AFTER THE RUN: record the stats here, and
+adjudicate the ~112 unexplained outliers (|diff| > 0.10) the
+2026-08-17 run left open (plus ~12 known his-p=1 z=+inf artifacts,
+reported separately by the script).
 
 Reproduce the published results for the 5,087 trials in Carlisle's 2017
 *Anaesthesia* paper from the same inputs, as an end-to-end check on the Monte
