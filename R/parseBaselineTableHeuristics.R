@@ -118,7 +118,8 @@
 # contains only the lines of one typographic column.
 .ppParseBlock <- function(lines, lineTexts, capIdx, trial, parenIsSD,
                           roundObsDelta, say,
-                          textCands = NULL, textTotals = NULL) {
+                          textCands = NULL, textTotals = NULL,
+                          pctApprox = FALSE) {
 
   # Footnote / end-of-table patterns. Checked BEFORE tokenizing, because a
   # footnote like "Values are mean +/- SD" itself contains a mean+/-SD-shaped
@@ -435,6 +436,12 @@
   catColumns   <- character(0)
   usedRowNames <- character(0)
   pctDerived   <- character(0) # rows whose counts were derived from percents
+  pctApproxRows <- character(0) # rows using the opt-in approximation
+  derivedCells <- list()       # (ROW, COL, KIND, NOTE) for the app grid
+  addDerived <- function(rowName, colName, kind, note)
+    derivedCells[[length(derivedCells) + 1]] <<-
+      data.frame(ROW = rowName, COL = colName, KIND = kind,
+                 NOTE = note, stringsAsFactors = FALSE)
 
   addSkip <- function(label, reason, txt)
     skipped[[length(skipped) + 1]] <<-
@@ -498,14 +505,35 @@
     pctGenre <- mainType == "pctOnly" ||
       (mainType == "plain" &&
          ((!is.na(catHeader) && catHeaderPct) || rowSaysPct))
+    pendingDerive <- NULL
     if (pctGenre) {
-      cnts <- vapply(seq_len(nArms), function(j) {
-        t <- armTok[[j]]
-        if (is.null(t) || !t$type %in% c("pctOnly", "plain"))
-          return(NA_integer_)
-        .ppCountFromPct(t$num1, t$dec1, armN[arms[j]])
-      }, integer(1))
       present <- !vapply(armTok, is.null, logical(1))
+      cnts   <- rep(NA_integer_, nArms)
+      approx <- rep(FALSE, nArms)
+      notes  <- rep(NA_character_, nArms)
+      for (j in which(present)) {
+        t <- armTok[[j]]
+        if (!t$type %in% c("pctOnly", "plain")) next
+        N <- armN[arms[j]]
+        cnts[j] <- .ppCountFromPct(t$num1, t$dec1, N)
+        if (!is.na(cnts[j])) {
+          notes[j] <- sprintf("%s%% of N=%d -> %d (uniquely pinned)",
+                              format(t$num1), N, cnts[j])
+        } else if (isTRUE(pctApprox) && !is.na(N) &&
+                   !is.na(t$num1) && t$num1 >= 0 && t$num1 <= 100) {
+          # Opt-in APPROXIMATION (2026-08-21, Steve's request): the
+          # bracket did not pin a unique count, so round(N x pct / 100)
+          # is used - within half a printed unit of N/100 of the truth.
+          # Recorded as approximate, painted green in the app grid, and
+          # reported by reviewFlags(); never on by default.
+          cnts[j]   <- max(0L, min(as.integer(N),
+                                   as.integer(round(N * t$num1 / 100))))
+          approx[j] <- TRUE
+          notes[j]  <- sprintf(
+            "APPROXIMATE: %s%% of N=%d -> round() = %d (not uniquely pinned)",
+            format(t$num1), N, cnts[j])
+        }
+      }
       if (any(present) && !any(is.na(cnts[present]))) {
         for (j in which(present)) {
           armTok[[j]]$num1 <- cnts[j]
@@ -517,8 +545,15 @@
         label <- .ppCleanLabel(sub(
           "(?i)\\s*[,;]?\\s*\\(?\\s*(%|percent(age)?s?)\\s*\\)?\\s*$",
           "", label, perl = TRUE))
-        pctDerived <- c(pctDerived,
-                        if (nchar(label) > 0) label else catHeader)
+        shown <- if (nchar(label) > 0) label else catHeader
+        if (any(approx[present])) pctApproxRows <- c(pctApproxRows, shown)
+        else                      pctDerived    <- c(pctDerived, shown)
+        # Remembered until the branch below knows the column names it
+        # created; consumed there into $derivedCells for the app grid.
+        pendingDerive <- list(
+          kind = if (any(approx[present])) "approximate" else "unique",
+          note = paste(notes[present][!is.na(notes[present])],
+                       collapse = "; "))
         # Children of a category header accumulate into its row as counts;
         # a standalone percent row is a binary category with a complement,
         # exactly like a printed "n (%)" cell.
@@ -526,7 +561,8 @@
       } else {
         addSkip(if (nchar(label) > 0) label else txt,
                 paste("percent only - needs the arm N, and the printed",
-                      "percent must pin a unique count; enter by hand"), txt)
+                      "percent must pin a unique count (or pctApprox =",
+                      "TRUE); enter by hand"), txt)
         next
       }
     }
@@ -648,6 +684,12 @@
         if (haveN) out[[complementName]] <- armN[arms[j]] - cnt
         out
       })
+      if (!is.null(pendingDerive)) {
+        addDerived(rowName, catName, pendingDerive$kind, pendingDerive$note)
+        if (haveN)
+          addDerived(rowName, complementName, pendingDerive$kind,
+                     "complement: arm N minus the derived count")
+      }
       outRows[[length(outRows) + 1]] <-
         list(row = rowName, type = "category", perArm = perArm)
 
@@ -670,10 +712,13 @@
             list(row = rowName, type = "category", perArm = counts, key = key)
         } else {
           e <- existing[1]
+          rowName <- outRows[[e]]$row
           for (j in seq_len(nArms))
             if (!is.null(counts[[j]]))
               outRows[[e]]$perArm[[j]] <- c(outRows[[e]]$perArm[[j]], counts[[j]])
         }
+        if (!is.null(pendingDerive))
+          addDerived(rowName, catName, pendingDerive$kind, pendingDerive$note)
       } else {
         addSkip(label, "bare number with no category header and no SD - not usable",
                 txt)
@@ -729,6 +774,9 @@
                                stringsAsFactors = FALSE),
        armNSource = armNSource[arms][keep],
        derivedCounts = unique(pctDerived),
+       approxCounts  = unique(pctApproxRows),
+       derivedCells  = if (length(derivedCells)) do.call(rbind, derivedCells)
+                       else NULL,
        clusters   = nArms,
        skipped    = skippedDf,
        dispersion = dispersionBasis)
@@ -793,6 +841,13 @@
 #'   a text-layer parse.
 #' @param ocrDpi Rendering resolution for OCR. Higher is slower and not
 #'   necessarily better; 300 is a reasonable default for journal scans.
+#' @param pctApprox Opt in to APPROXIMATE percent conversion. Percent-block
+#'   cells are normally converted to counts only when the printed percentage
+#'   and the arm N pin exactly one integer; with `pctApprox = TRUE`, cells
+#'   the bracket cannot pin fall back to `round(N x pct / 100)`. Every such
+#'   value is recorded in `$approxCounts` and `$derivedCells` and reported
+#'   by [reviewFlags()] - it is a computed approximation (off by up to half
+#'   a printed unit of N/100), not a printed datum. Default `FALSE`.
 #' @param quiet Suppress the progress and summary messages.
 #'
 #' @return An object of class `ParsePDFTable`: a list with
@@ -822,6 +877,7 @@ parseBaselineTableHeuristics <- function(pdfFile,
                                          maxCandidates = 6,
                                          ocr           = FALSE,
                                          ocrDpi        = 300,
+                                         pctApprox     = FALSE,
                                          quiet         = FALSE)
 {
   layout    <- match.arg(layout)
@@ -985,7 +1041,8 @@ parseBaselineTableHeuristics <- function(pdfFile,
     res <- tryCatch(
       .ppParseBlock(cc$lines, cc$lineTexts, cc$capIdx, trial, parenIsSD,
                     roundObsDelta, function(...) invisible(NULL),
-                    textCands = textCands, textTotals = textTotals),
+                    textCands = textCands, textTotals = textTotals,
+                    pctApprox = pctApprox),
       error = function(e) NULL)
     sc <- .ppParseScore(res)
     if (!is.finite(sc)) next
@@ -1037,7 +1094,8 @@ parseBaselineTableHeuristics <- function(pdfFile,
         .ppParseBlock(c(extLines, lines2), c(extTexts, lt2), bestCand$capIdx,
                       trial, parenIsSD, roundObsDelta,
                       function(...) invisible(NULL),
-                      textCands = textCands, textTotals = textTotals),
+                      textCands = textCands, textTotals = textTotals,
+                      pctApprox = pctApprox),
         error = function(e) NULL)
       if (.ppParseScore(resExt) <= .ppParseScore(best)) break
       best      <- resExt
@@ -1074,6 +1132,8 @@ parseBaselineTableHeuristics <- function(pdfFile,
          dispersion = best$dispersion,
          armNSource = best$armNSource,
          derivedCounts = best$derivedCounts,
+         approxCounts  = best$approxCounts,
+         derivedCells  = best$derivedCells,
          engine     = "heuristic"),
     class = "ParsePDFTable")
 }

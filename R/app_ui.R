@@ -168,6 +168,15 @@ app_ui <- function(testNote = NULL)
             "in<br>")),
           fileInput("upload", NULL, multiple = TRUE,
                     accept = c(".csv", ".xls", ".xlsx", ".pdf", ".zip")),
+          # Opt-in approximation (Steve, 2026-08-21): percent-only cells
+          # whose printed rounding cannot pin a unique count fall back to
+          # round(arm N x percent). Everything the parser derives - exact
+          # or approximate - paints GREEN in the grid: OK to use, but
+          # best to check before the analysis runs.
+          checkboxInput("pctApprox", paste(
+            "Convert percent-only cells to approximate counts when the",
+            "exact count cannot be determined (derived values show green",
+            "in the table below)"), value = TRUE, width = "100%"),
           actionButton("blank", "Start With an Empty Table"),
           HTML("<br><br>"),
           # The editable pre-analysis grid (Steve's request, 2026-08-17):

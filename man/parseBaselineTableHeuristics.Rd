@@ -14,6 +14,7 @@ parseBaselineTableHeuristics(
   maxCandidates = 6,
   ocr = FALSE,
   ocrDpi = 300,
+  pctApprox = FALSE,
   quiet = FALSE
 )
 }
@@ -53,6 +54,14 @@ a text-layer parse.}
 
 \item{ocrDpi}{Rendering resolution for OCR. Higher is slower and not
 necessarily better; 300 is a reasonable default for journal scans.}
+
+\item{pctApprox}{Opt in to APPROXIMATE percent conversion. Percent-block
+cells are normally converted to counts only when the printed percentage
+and the arm N pin exactly one integer; with \code{pctApprox = TRUE}, cells
+the bracket cannot pin fall back to \verb{round(N x pct / 100)}. Every such
+value is recorded in \verb{$approxCounts} and \verb{$derivedCells} and reported
+by \code{\link[=reviewFlags]{reviewFlags()}} - it is a computed approximation (off by up to half
+a printed unit of N/100), not a printed datum. Default \code{FALSE}.}
 
 \item{quiet}{Suppress the progress and summary messages.}
 }

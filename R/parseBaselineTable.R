@@ -62,6 +62,17 @@ reviewFlags <- function(x) {
                              "converted from printed percentages via the ",
                              "arm N (unique-count bracket): ",
                              paste(x$derivedCounts, collapse = ", ")))
+  # APPROXIMATE conversions (pctApprox = TRUE) are a step further from the
+  # page than the unique bracket: round(N x pct / 100) can be off by up to
+  # half a printed unit of N/100. Usable, but check before analyzing.
+  if (!is.null(x$approxCounts) && length(x$approxCounts) > 0)
+    flags <- c(flags, paste0(length(x$approxCounts), " category row(s) use ",
+                             "APPROXIMATE counts - round(arm N x percent) ",
+                             "where the printed rounding could not pin a ",
+                             "unique integer: ",
+                             paste(x$approxCounts, collapse = ", "),
+                             ". Check these against the paper before ",
+                             "analyzing."))
   disp <- if ("SE" %in% names(x$data))
     !is.na(x$data$SD) | !is.na(x$data$SE) else !is.na(x$data$SD)
   cont <- !is.na(x$data$MEAN) | disp
@@ -143,6 +154,7 @@ parseBaselineTable <- function(pdfFile,
                                prose         = TRUE,
                                parenIsSD     = c("auto", "sd", "percent"),
                                roundObsDelta = 1,
+                               pctApprox     = FALSE,
                                model         = .ppDefaultModel,
                                effort        = "medium",
                                maxTokens     = 16000L,
@@ -165,7 +177,8 @@ parseBaselineTable <- function(pdfFile,
   het <- tryCatch(
     parseBaselineTableHeuristics(pdfFile, trial = trial, pages = pages,
                                  parenIsSD = parenIsSD,
-                                 roundObsDelta = roundObsDelta, quiet = quiet),
+                                 roundObsDelta = roundObsDelta,
+                                 pctApprox = pctApprox, quiet = quiet),
     error = function(e) e)
 
   if (inherits(het, "error")) {

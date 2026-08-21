@@ -160,11 +160,20 @@ app_server <- function(input, output, session) {
   # user fills any data into it, which is exactly right.
   parseSkips <- reactiveVal(NULL)
 
+  # Values the parser DERIVED rather than read off the page - counts
+  # converted from printed percentages (exact or, with the checkbox on,
+  # approximate) and recovered arm Ns. They paint GREEN in the grid:
+  # "OK to use, but best to check before it runs" (Steve, 2026-08-21).
+  # Registry rows: (TRIAL, ROW, COL, note); ROW = "*" means every row of
+  # the trial (used for the N column when arm sizes were recovered).
+  parseDerived <- reactiveVal(NULL)
+
   # The legend IS the error report (Steve's direction, 2026-08-19): no
   # explanatory text prints below the table, so each color carries its
   # explanation here, and every colored cell explains itself on hover.
   output$issueLegend <- renderUI({
-    if (is.null(rIssues())) return(NULL)
+    hasDerived <- !is.null(parseDerived()) && nrow(parseDerived()) > 0
+    if (is.null(rIssues()) && !hasDerived) return(NULL)
     entry <- function(color, label, text) div(
       style = "margin: 2px 0;",
       span(style = paste0("display:inline-block; width:14px; height:14px;",
@@ -172,6 +181,11 @@ app_server <- function(input, output, session) {
                           "vertical-align:middle; margin-right:6px;")),
       tags$b(label), paste0(" - ", text))
     div(style = "margin: 4px 0 8px 0; font-size: 13px;",
+        if (hasDerived) entry("#d7f0d7", "derived", paste(
+          "the parser computed this value - a percentage converted to a",
+          "count, or an arm N recovered from the document. OK to use,",
+          "but best to check before it runs; hover the cell to see how",
+          "it was derived.")),
         entry("#fff3b0", "missing", paste(
           "a required value is empty. Enter it, or delete the row.",
           "Rows with a label but no data at all are left out of the",
@@ -198,21 +212,48 @@ app_server <- function(input, output, session) {
     # generic per-color explanation otherwise.
     issPayload <- NULL
     notePayload <- NULL
+    # GREEN derived cells first, so that issue and skip colors - which
+    # demand action rather than a glance - overwrite them on conflict.
+    dv <- parseDerived()
+    if (!is.null(dv) && nrow(dv) > 0 && all(c("TRIAL", "ROW") %in% names(d))) {
+      issPayload <- list(); notePayload <- list()
+      for (g in seq_len(nrow(dv))) {
+        ci <- match(dv$COL[g], names(d))
+        if (is.na(ci)) next
+        hits <- if (dv$ROW[g] == "*")
+          which(as.character(d$TRIAL) == dv$TRIAL[g])
+        else
+          which(as.character(d$TRIAL) == dv$TRIAL[g] &
+                as.character(d$ROW) == dv$ROW[g])
+        # paint only cells that carry a value - a green empty cell would
+        # read as "this blank is fine", which is the opposite of true
+        hits <- hits[!is.na(d[hits, ci])]
+        for (r in hits) {
+          key <- paste0(r - 1, "|", ci - 1)
+          issPayload[[key]] <- "derived"
+          notePayload[[key]] <- dv$note[g]
+        }
+      }
+      if (length(issPayload) == 0) { issPayload <- NULL; notePayload <- NULL }
+    }
     iss <- rIssues()
     if (!is.null(iss)) {
       ci <- match(iss$col, names(d))
       ok <- !is.na(ci) & iss$row <= nrow(d)
       if (any(ok)) {
-        issPayload <- as.list(iss$code[ok])
-        names(issPayload) <- paste0(iss$row[ok] - 1, "|", ci[ok] - 1)
+        if (is.null(issPayload)) issPayload <- list()
+        addI <- as.list(iss$code[ok])
+        names(addI) <- paste0(iss$row[ok] - 1, "|", ci[ok] - 1)
+        issPayload[names(addI)] <- addI
         # cell-specific hover text where validateData supplied one
         # (e.g. the single-line-categorical explanation)
         if ("note" %in% names(iss)) {
           noted <- ok & !is.na(iss$note)
           if (any(noted)) {
-            notePayload <- as.list(iss$note[noted])
-            names(notePayload) <- paste0(iss$row[noted] - 1, "|",
-                                         ci[noted] - 1)
+            if (is.null(notePayload)) notePayload <- list()
+            addN <- as.list(iss$note[noted])
+            names(addN) <- paste0(iss$row[noted] - 1, "|", ci[noted] - 1)
+            notePayload[names(addN)] <- addN
           }
         }
       }
@@ -331,10 +372,15 @@ app_server <- function(input, output, session) {
                        "the row.',",
       "      unreadable: 'This could not be read as a number.',",
       "      incongruent: 'This value conflicts with the type of the ",
-                          "row.'};",
+                          "row.',",
+      "      derived: 'The parser computed this value (a percent ",
+      "               converted to a count, or a recovered arm N). ",
+      "               OK to use, but best to check it before the ",
+      "               analysis runs.'};",
       "    if (code === 'missing') td.style.background = '#fff3b0';",
       "    else if (code === 'unreadable') td.style.background = '#f4b6b6';",
       "    else if (code === 'incongruent') td.style.background = '#b8d0f0';",
+      "    else if (code === 'derived') td.style.background = '#d7f0d7';",
       "    if (code) {",
       "      var notes = instance.params.cellNotes;",
       "      td.title = (notes && notes[key]) ? notes[key] : help[code];",
@@ -468,6 +514,7 @@ app_server <- function(input, output, session) {
     output$downloadButton <- NULL
     rIssues(NULL)   # fresh empty table - no issue colors yet
     parseSkips(NULL)
+    parseDerived(NULL)
     blank <- data.frame(
       TRIAL = rep(NA_character_, 8), ROW = NA_character_,
       N = NA_real_, MEAN = NA_real_, SD = NA_real_, SE = NA_real_,
@@ -671,7 +718,8 @@ app_server <- function(input, output, session) {
                                      " file(s), up to 60 s each"))
         res <- parseBaselineTableFiles(files$datapath[pdfIdx],
                                        ai = "never", timeout = 60,
-                                       quiet = TRUE)
+                                       quiet = TRUE,
+                                       pctApprox = isTRUE(input$pctApprox))
         progress$close()
         for (k in seq_along(pdfIdx)) {
           i <- pdfIdx[k]
@@ -713,9 +761,22 @@ app_server <- function(input, output, session) {
             rownames(extra) <- NULL
             d <- rbind(d, extra)
           }
+          # Green-cell registry input: cells whose values the parser
+          # derived (percent conversions per row/column, and the N column
+          # when arm sizes were recovered rather than printed).
+          derived <- r$derivedCells
+          if (!is.null(r$armNSource) && any(!is.na(r$armNSource))) {
+            nNote <- paste0("arm N recovered by the parser: ",
+                            paste(unique(r$armNSource[!is.na(r$armNSource)]),
+                                  collapse = " | "))
+            derived <- rbind(derived,
+                             data.frame(ROW = "*", COL = "N", KIND = "recovered",
+                                        NOTE = nNote, stringsAsFactors = FALSE))
+          }
           frames[[length(frames) + 1]] <-
             list(stem = files$stem[i], data = d,
-                 skips = if (nrow(r$skipped) > 0) r$skipped else NULL)
+                 skips = if (nrow(r$skipped) > 0) r$skipped else NULL,
+                 derived = derived)
         }
       }
 
@@ -786,6 +847,19 @@ app_server <- function(input, output, session) {
                    stringsAsFactors = FALSE)
       }))
       parseSkips(unique(rbind(parseSkips(), skipReg)))
+      deriveReg <- do.call(rbind, lapply(frames, function(f) {
+        if (is.null(f$derived) || nrow(f$derived) == 0) return(NULL)
+        data.frame(TRIAL = as.character(f$data$TRIAL[1]),
+                   ROW = f$derived$ROW, COL = f$derived$COL,
+                   note = paste0(
+                     ifelse(f$derived$KIND == "approximate",
+                            "APPROXIMATE - ", "Derived by the parser - "),
+                     f$derived$NOTE,
+                     ". OK to use, but best to check against the paper ",
+                     "before the analysis runs."),
+                   stringsAsFactors = FALSE)
+      }))
+      parseDerived(unique(rbind(parseDerived(), deriveReg)))
       reactiveData(DATA)
     }
   )

@@ -12,6 +12,7 @@ parseBaselineTable(
   prose = TRUE,
   parenIsSD = c("auto", "sd", "percent"),
   roundObsDelta = 1,
+  pctApprox = FALSE,
   model = .ppDefaultModel,
   effort = "medium",
   maxTokens = 16000L,
@@ -46,6 +47,14 @@ found this way are tagged \code{"ai-prose"} in \verb{$provenance}.}
 \item{roundObsDelta}{ROUND_OBSERVATION is set to ROUND_MEAN +
 \code{roundObsDelta}. Observations are often recorded with one more digit than
 the reported mean, hence the default of 1. Set to 0 to make them equal.}
+
+\item{pctApprox}{Opt in to APPROXIMATE percent conversion. Percent-block
+cells are normally converted to counts only when the printed percentage
+and the arm N pin exactly one integer; with \code{pctApprox = TRUE}, cells
+the bracket cannot pin fall back to \verb{round(N x pct / 100)}. Every such
+value is recorded in \verb{$approxCounts} and \verb{$derivedCells} and reported
+by \code{\link[=reviewFlags]{reviewFlags()}} - it is a computed approximation (off by up to half
+a printed unit of N/100), not a printed datum. Default \code{FALSE}.}
 
 \item{model, effort, maxTokens, apiKey}{Passed to \code{\link[=parseBaselineTableAI]{parseBaselineTableAI()}}.}
 
