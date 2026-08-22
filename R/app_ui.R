@@ -162,12 +162,13 @@ app_ui <- function(testNote = NULL)
           12,
           HTML(paste0(
             "<br>Select one or more data entry spreadsheets (csv, xls, ",
-            "xlsx), article PDFs, or a zip of many such files - ",
-            "everything combines into one table, distinguished by ",
-            "trial - or start with an empty table and type the data ",
-            "in<br>")),
+            "xlsx), article PDFs, Word manuscripts (docx), or a zip of ",
+            "many such files - everything combines into one table, ",
+            "distinguished by trial - or start with an empty table and ",
+            "type the data in<br>")),
           fileInput("upload", NULL, multiple = TRUE,
-                    accept = c(".csv", ".xls", ".xlsx", ".pdf", ".zip")),
+                    accept = c(".csv", ".xls", ".xlsx", ".pdf", ".docx",
+                               ".zip")),
           # Opt-in approximation (Steve, 2026-08-21): percent-only cells
           # whose printed rounding cannot pin a unique count fall back to
           # round(arm N x percent). Everything the parser derives - exact

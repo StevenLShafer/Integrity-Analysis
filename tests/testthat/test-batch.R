@@ -71,5 +71,6 @@ test_that("an explicit vector of paths works, and an empty one is an error", {
   res <- parseBaselineTableFiles(c(f), quiet = TRUE)
   expect_equal(nrow(res), 1)
   expect_true(res$ok)
-  expect_error(parseBaselineTableFiles(character(0)), "No PDF files")
+  expect_error(parseBaselineTableFiles(character(0)),
+               "No PDF or Word files")
 })

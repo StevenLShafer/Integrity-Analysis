@@ -33,7 +33,7 @@ vertical-align: middle;
 <li><a href="#background" id="toc-background">Background</a></li>
 <li><a href="#quick-start" id="toc-quick-start">Quick start</a>
 <ul>
-<li><a href="#the-five-ways-in" id="toc-the-five-ways-in">The five ways
+<li><a href="#the-six-ways-in" id="toc-the-six-ways-in">The six ways
 in</a></li>
 </ul></li>
 <li><a href="#the-data-grid" id="toc-the-data-grid">The data
@@ -165,9 +165,9 @@ Carlisle’s 2017 results (see <em>Validation</em> below).</p>
 <h1 id="quick-start">Quick start</h1>
 <ol type="1">
 <li>Open <a href="https://steveshafer.shinyapps.io/IntegrityAnalysis/" class="uri">https://steveshafer.shinyapps.io/IntegrityAnalysis/</a>.</li>
-<li>Get your baseline table into the app by any of the four routes below
-(spreadsheet upload, article PDF upload, several files at once, or
-typing into an empty table).</li>
+<li>Get your baseline table into the app by any of the routes below
+(spreadsheet upload, article PDF or Word manuscript upload, several
+files at once, or typing into an empty table).</li>
 <li>Review the table in the editable grid. Fix anything colored (see
 <em>The data grid</em> below), then click <strong>Apply Edits &amp;
 Revalidate</strong>.</li>
@@ -177,7 +177,7 @@ trial’s p value appears as it completes.</li>
 later session), and the reconstructed baseline table (the journal-style
 view, for comparison against the manuscript).</li>
 </ol>
-<h2 id="the-five-ways-in">The five ways in</h2>
+<h2 id="the-six-ways-in">The six ways in</h2>
 <p><strong>A template spreadsheet.</strong> Download the Template
 (sidebar), fill it in (Excel <code>.xlsx</code>/<code>.xls</code> or
 <code>.csv</code>), and upload it. The Example download shows a
@@ -191,25 +191,38 @@ table lines the reader could not use appear as red-flagged rows in the
 grid (fill them in from the paper, or delete them), and a scanned image
 with no text layer fails cleanly with a message. Whatever was extracted
 can be reviewed, corrected, and analyzed without leaving the app.</p>
+<p><strong>A Word manuscript (.docx).</strong> A submission in Word
+format uploads the same way as a PDF: the app examines every table in
+the document — submissions put them at the end, with the caption just
+above — picks the baseline table by its caption and content, and
+extracts it into the grid. Because a Word table is a real table rather
+than a picture of one, extraction is typically cleaner than from a PDF.
+The same safeguards apply: deterministic, entirely local, unusable lines
+red-flagged in the grid, and when no printed arm sizes exist the app
+looks for “(n = …)” statements in the Methods text (flagged for checking
+against the CONSORT diagram). The table must be a genuine Word table — a
+pasted image of a table has no text to read.</p>
 <p><strong>Several files at once — or one after another.</strong> Any
-mix of spreadsheets and PDFs in one selection, and any number of uploads
-in sequence: <strong>each upload appends to the table already in the
-grid</strong> (including edits you have typed but not yet revalidated).
-Every file becomes rows in the combined table, distinguished by the
-TRIAL column; a file without trial identifiers gets its file name as the
-trial. If a new file uses trial labels already in the table, its labels
-are prefixed with its file name so nothing silently merges. To start
-over, click <strong>Start With an Empty Table</strong>.</p>
+mix of spreadsheets, PDFs, and Word manuscripts in one selection, and
+any number of uploads in sequence: <strong>each upload appends to the
+table already in the grid</strong> (including edits you have typed but
+not yet revalidated). Every file becomes rows in the combined table,
+distinguished by the TRIAL column; a file without trial identifiers gets
+its file name as the trial. If a new file uses trial labels already in
+the table, its labels are prefixed with its file name so nothing
+silently merges. To start over, click <strong>Start With an Empty
+Table</strong>.</p>
 <p><strong>A zip archive of a whole analysis.</strong> Zip any number of
-spreadsheets and article PDFs into one <code>.zip</code> and upload just
-that. This is built for reproducing a multi-trial investigation — the
-pattern of Carlisle’s 2012 review of Fujii’s 168 trials (<a href="https://pubmed.ncbi.nlm.nih.gov/22404311/">PMID 22404311</a>): put
+spreadsheets, article PDFs, and Word manuscripts into one
+<code>.zip</code> and upload just that. This is built for reproducing a
+multi-trial investigation — the pattern of Carlisle’s 2012 review of
+Fujii’s 168 trials (<a href="https://pubmed.ncbi.nlm.nih.gov/22404311/">PMID 22404311</a>): put
 one file per trial in the archive and every entry becomes its own trial
 in the combined table, named after its file. Folders inside the archive
 are fine (only the file names are used); files that are not
-csv/xls/xlsx/PDF are skipped with a note, an archive inside the archive
-is not expanded, and a corrupt archive is reported rather than analyzed.
-Limits: 300 files and 300 MB uncompressed per archive.</p>
+csv/xls/xlsx/PDF/docx are skipped with a note, an archive inside the
+archive is not expanded, and a corrupt archive is reported rather than
+analyzed. Limits: 300 files and 300 MB uncompressed per archive.</p>
 <p><strong>An empty table.</strong> Click <strong>Start With an Empty
 Table</strong> and type the data straight into the grid — eight empty
 rows and placeholder category columns (CAT1–CAT3) to start. Add rows

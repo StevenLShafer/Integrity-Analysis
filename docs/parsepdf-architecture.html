@@ -275,6 +275,19 @@
     <code>63</code> has 0 decimals and <code>63.0</code> has 1. That distinction is data — it
     tells the Monte Carlo analysis how much of a discrepancy rounding alone can explain.</p>
 
+    <h3>Word manuscripts — .docx (issue 19, 2026-08-21)</h3>
+    <p>A <code>.docx</code> submission dispatches by extension inside
+    <code>parseBaselineTableHeuristics()</code> to <code>R/parseDocx.R</code>. A Word table is
+    already a grid of cells, so the docx path fabricates the word-coordinate
+    <code>lines</code> structure and feeds <code>.ppParseBlock()</code> verbatim — column
+    <em>c</em>'s words at <code>x = (c−1) × pitch</code>, pitch computed from the widest cell so
+    every Word column is exactly one cluster — buying every cell rule above unchanged. Captions
+    pair exactly (nearest preceding paragraphs, scored by <code>.ppCaptionScore()</code>);
+    footnotes append as synthetic lines; arm-N recovery reads the paragraphs; <code>pages</code>
+    is the table's ordinal; <code>engine</code> is <code>heuristic-docx</code>. The AI fallback
+    is refused for docx (it renders PDF pages). A crafted docx can stall libxml2, so the app
+    routes it through the subprocess-and-timeout batcher exactly like a PDF.</p>
+
     <h3>Submitted manuscripts (2026-08-20)</h3>
     <p>The deployed app screens <strong>submissions, not published articles</strong>. Screening
     654 RCT submissions from the A&amp;A manuscript corpus found five manuscript-specific

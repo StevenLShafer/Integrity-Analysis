@@ -18,7 +18,9 @@
 # enforcing the time limit.                                               #
 #                                                                          #
 # It is invoked by parseBaselineTableFiles(); there is no reason to run it#
-# by hand. Arguments: <optionsRds> <outputRds> <pdfFile>.                 #
+# by hand. Arguments: <optionsRds> <outputRds> <pdfFile>. A .docx path    #
+# flows through unchanged - parseBaselineTable() dispatches by extension  #
+# internally (issue 19), so do NOT "fix" the pdfFile= name here.          #
 # Status: run and verified by tests/testthat/test-batch.R, with the       #
 # masking ParsePDF installation removed from the machine first.           #
 ############################################################################
