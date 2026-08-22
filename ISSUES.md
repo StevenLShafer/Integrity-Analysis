@@ -502,6 +502,56 @@ sensitivity.
 
 ---
 
+## 17. Journal-style wide spreadsheets as input (IMPLEMENTED 2026-08-21)
+
+Steve's request (2026-08-21): the app must read an Excel spreadsheet in
+"the usual form" - variables as rows, arms as columns - i.e. exactly the
+journal-style table the app itself generates as the Editor's View
+download (issue 15). The specified acceptance test: generate that table
+from a validated frame, feed it back through the input parser, and
+verify the validated result matches the frame it came from.
+
+As built (R/parseWideTable.R, integrated in the upload observer ahead of
+the plain-spreadsheet reader): detection is conservative (a "(n = 15)"
+arm header, or a Variable/Characteristic label column over rows of
+recognizable cells; a header carrying the template's own TRIAL/ROW/N/
+MEAN/SD names is vetoed so template files keep flowing to
+validateData()); both generator shapes parse (one sheet per trial, and
+the results workbook's stacked "Trial: <id>" blocks - re-uploading the
+whole three-tab results workbook reads just the Baseline Tables sheet);
+and per Steve's scope decision the parser is TOLERANT: arbitrary arm
+headers ("Control (n=50)", "Treatment"), "mean ± SD", untagged
+"a (b)" (label-driven SD-vs-percent, defaulting SD), "n (%)" rows
+(count + complement, mirroring the PDF engine), "; n = 14" per-line N
+overrides, and un-indented count rows under a category header.
+
+Decisions worth remembering:
+
+- **Median intervals are emitted only when the label says IQR** ("median
+  [Q1, Q3]", "(IQR)", "quartiles"). A label saying "range", or saying
+  nothing, sends the row to the red-cell skip path: an IQR and a range
+  both straddle the median, so the numbers cannot distinguish them, and
+  a wrong guess would feed the metalog null in a fraud-screening
+  verdict. (The PDF engine's parallel change is issue 18.)
+- **ROUND_OBSERVATION = ROUND_MEAN** (not the PDF engine's +1): the wide
+  format never prints observation granularity, and matching
+  validateData()'s own default is what lets the round trip close
+  exactly.
+- Skipped rows use the PDF branch's contract - they arrive as grid rows
+  with red ROW cells and the reason on hover.
+- Not in v1, skipped with reasons: fraction cells ("15/10"),
+  percent-only cells. Known limitation: a cell Excel typed as a NUMBER
+  loses trailing zeros ("12.10" reads as "12.1"), so printed-precision
+  recovery is exact for text cells (everything the app generates is
+  text).
+
+Validation: tests/testthat/test-wide-table.R (round trips over both
+shapes plus the app-level upload, and the adversarial cases), with the
+shared fixture in helper-baselineTable.R. Template.xlsx/Example.xlsx
+non-detection is a pinned regression test.
+
+---
+
 ## Closed
 
 ### 2. Point https://integrityanalysis.io at the app (closed 2026-08-19)

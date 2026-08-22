@@ -698,6 +698,47 @@ app_server <- function(input, output, session) {
         as.data.frame(read_excel(path))
       }
       for (i in which(files$ext != "pdf")) {
+        # Journal-style wide tables first (issue 17): a sheet laid out
+        # the way journals print Table 1 - including the Editor's View
+        # workbook this app itself generates - parses into template
+        # lines here. Detection is conservative (parseWideTable returns
+        # NULL for anything not confidently wide), so the long template
+        # format and every other spreadsheet flow to readSheet() below
+        # exactly as before. One frame per trial BLOCK, because the
+        # skip registry keys on a frame's single trial.
+        wide <- tryCatch(parseWideTable(files$datapath[i], files$ext[i]),
+                         error = function(e) NULL)
+        if (!is.null(wide)) {
+          for (blk in wide) {
+            d <- blk$data
+            if (all(is.na(d$TRIAL))) d$TRIAL <- files$stem[i]
+            # Rows the parser could not use become GRID ROWS with the
+            # reason on hover - same contract as the PDF branch below.
+            if (nrow(blk$skipped) > 0) {
+              extra <- d[rep(NA_integer_, nrow(blk$skipped)), ,
+                         drop = FALSE]
+              extra$TRIAL <- d$TRIAL[1]
+              extra$ROW <- blk$skipped$label
+              rownames(extra) <- NULL
+              d <- rbind(d, extra)
+            }
+            frames[[length(frames) + 1]] <-
+              list(stem = files$stem[i], data = d,
+                   skips = if (nrow(blk$skipped) > 0) blk$skipped
+                           else NULL)
+          }
+          nSkip <- sum(vapply(wide, function(b) nrow(b$skipped),
+                              integer(1)))
+          outputComments(paste0(
+            "Read ", files$name[i], " as a journal-style baseline ",
+            "table: ", length(wide), " trial(s), ",
+            sum(vapply(wide, function(b) nrow(b$data), integer(1))),
+            " line(s)",
+            if (nSkip > 0) paste0(" (", nSkip,
+                                  " row(s) need attention - see the ",
+                                  "red cells)"), "."))
+          next
+        }
         d <- tryCatch(readSheet(files$datapath[i], files$ext[i]),
                       error = function(e) NULL)
         if (is.null(d) || nrow(d) == 0) {

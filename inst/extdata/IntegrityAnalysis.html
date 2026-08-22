@@ -33,7 +33,7 @@ vertical-align: middle;
 <li><a href="#background" id="toc-background">Background</a></li>
 <li><a href="#quick-start" id="toc-quick-start">Quick start</a>
 <ul>
-<li><a href="#the-five-ways-in" id="toc-the-five-ways-in">The five ways
+<li><a href="#the-six-ways-in" id="toc-the-six-ways-in">The six ways
 in</a></li>
 </ul></li>
 <li><a href="#the-data-grid" id="toc-the-data-grid">The data
@@ -79,7 +79,8 @@ roadmap</a></li>
   one-sided p toward homogeneity, adaptive replicates, the editable grid,
   color-coded cells, median/IQR rows, PDF parsing, multi-file upload, the
   purge guarantee, and the journal-style baseline table download.
-  Zipped multi-file upload added 2026-08-20.
+  Zipped multi-file upload added 2026-08-20; journal-style wide tables
+  as INPUT (issue 17) added 2026-08-21.
 
   TO REGENERATE THE SERVED HTML after editing this file:
     "C:\Program Files\Quarto\bin\tools\pandoc.exe" docs/user-guide.md
@@ -165,9 +166,9 @@ Carlisle’s 2017 results (see <em>Validation</em> below).</p>
 <h1 id="quick-start">Quick start</h1>
 <ol type="1">
 <li>Open <a href="https://steveshafer.shinyapps.io/IntegrityAnalysis/" class="uri">https://steveshafer.shinyapps.io/IntegrityAnalysis/</a>.</li>
-<li>Get your baseline table into the app by any of the four routes below
-(spreadsheet upload, article PDF upload, several files at once, or
-typing into an empty table).</li>
+<li>Get your baseline table into the app by any of the routes below
+(template or journal-style spreadsheet upload, article PDF upload,
+several files at once, or typing into an empty table).</li>
 <li>Review the table in the editable grid. Fix anything colored (see
 <em>The data grid</em> below), then click <strong>Apply Edits &amp;
 Revalidate</strong>.</li>
@@ -177,12 +178,29 @@ trial’s p value appears as it completes.</li>
 later session), and the reconstructed baseline table (the journal-style
 view, for comparison against the manuscript).</li>
 </ol>
-<h2 id="the-five-ways-in">The five ways in</h2>
+<h2 id="the-six-ways-in">The six ways in</h2>
 <p><strong>A template spreadsheet.</strong> Download the Template
 (sidebar), fill it in (Excel <code>.xlsx</code>/<code>.xls</code> or
 <code>.csv</code>), and upload it. The Example download shows a
 complete, working file. The format is described in <em>Preparing your
 data</em> below.</p>
+<p><strong>A journal-style baseline table.</strong> A spreadsheet laid
+out the way journals print Table 1 — variables as rows, arms as columns
+with their sizes in the headers (“Control (n = 50)”), cells like “45.3
+(12.1)” — uploads directly; the app recognizes the layout and converts
+it into template rows itself. The app’s own <strong>Editor’s
+View</strong> download is exactly this format, so a table downloaded
+from one session (or received from a colleague) is valid input to the
+next. What the cells may hold: “mean (SD)” and “mean ± SD”; “median [Q1,
+Q3]” <strong>when the row label says the interval is an IQR</strong> (a
+median with a min–max range, or with an unlabeled interval, is flagged
+for hand entry instead — the analysis needs quartiles, and the app will
+not guess); “n (%)” counts, which become a category with its complement;
+and bare counts indented under a category header (“Sex, n”). A row the
+app cannot read arrives as a red-flagged grid row with the reason on
+hover, exactly like an imperfect PDF extraction. Mean and SD in
+<em>separate columns</em> is the template format above, not this
+one.</p>
 <p><strong>An article PDF.</strong> Upload the article; the app finds
 the baseline table (“Table 1”) in the text layer and extracts it into
 the grid. The extraction is deterministic — the same PDF always yields

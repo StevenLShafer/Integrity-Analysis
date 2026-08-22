@@ -9,7 +9,8 @@
   one-sided p toward homogeneity, adaptive replicates, the editable grid,
   color-coded cells, median/IQR rows, PDF parsing, multi-file upload, the
   purge guarantee, and the journal-style baseline table download.
-  Zipped multi-file upload added 2026-08-20.
+  Zipped multi-file upload added 2026-08-20; journal-style wide tables
+  as INPUT (issue 17) added 2026-08-21.
 
   TO REGENERATE THE SERVED HTML after editing this file:
     "C:\Program Files\Quarto\bin\tools\pandoc.exe" docs/user-guide.md
@@ -107,9 +108,9 @@ results (see *Validation* below).
 # Quick start
 
 1. Open <https://steveshafer.shinyapps.io/IntegrityAnalysis/>.
-2. Get your baseline table into the app by any of the four routes below
-   (spreadsheet upload, article PDF upload, several files at once, or
-   typing into an empty table).
+2. Get your baseline table into the app by any of the routes below
+   (template or journal-style spreadsheet upload, article PDF upload,
+   several files at once, or typing into an empty table).
 3. Review the table in the editable grid. Fix anything colored (see
    *The data grid* below), then click **Apply Edits & Revalidate**.
 4. When the table validates, click **Analyze**. Each trial's p value
@@ -118,12 +119,29 @@ results (see *Validation* below).
    later session), and the reconstructed baseline table (the
    journal-style view, for comparison against the manuscript).
 
-## The five ways in
+## The six ways in
 
 **A template spreadsheet.** Download the Template (sidebar), fill it in
 (Excel `.xlsx`/`.xls` or `.csv`), and upload it. The Example download
 shows a complete, working file. The format is described in *Preparing
 your data* below.
+
+**A journal-style baseline table.** A spreadsheet laid out the way
+journals print Table 1 — variables as rows, arms as columns with their
+sizes in the headers ("Control (n = 50)"), cells like "45.3 (12.1)" —
+uploads directly; the app recognizes the layout and converts it into
+template rows itself. The app's own **Editor's View** download is
+exactly this format, so a table downloaded from one session (or received
+from a colleague) is valid input to the next. What the cells may hold:
+"mean (SD)" and "mean ± SD"; "median [Q1, Q3]" **when the row label says
+the interval is an IQR** (a median with a min–max range, or with an
+unlabeled interval, is flagged for hand entry instead — the analysis
+needs quartiles, and the app will not guess); "n (%)" counts, which
+become a category with its complement; and bare counts indented under a
+category header ("Sex, n"). A row the app cannot read arrives as a
+red-flagged grid row with the reason on hover, exactly like an
+imperfect PDF extraction. Mean and SD in *separate columns* is the
+template format above, not this one.
 
 **An article PDF.** Upload the article; the app finds the baseline
 table ("Table 1") in the text layer and extracts it into the grid. The

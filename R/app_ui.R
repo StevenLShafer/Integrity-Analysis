@@ -162,7 +162,9 @@ app_ui <- function(testNote = NULL)
           12,
           HTML(paste0(
             "<br>Select one or more data entry spreadsheets (csv, xls, ",
-            "xlsx), article PDFs, or a zip of many such files - ",
+            "xlsx), journal-style baseline tables (variables as rows, ",
+            "arms as columns - including this app's own Editor's View ",
+            "download), article PDFs, or a zip of many such files - ",
             "everything combines into one table, distinguished by ",
             "trial - or start with an empty table and type the data ",
             "in<br>")),
