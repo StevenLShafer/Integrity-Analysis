@@ -107,9 +107,9 @@ results (see *Validation* below).
 # Quick start
 
 1. Open <https://steveshafer.shinyapps.io/IntegrityAnalysis/>.
-2. Get your baseline table into the app by any of the four routes below
-   (spreadsheet upload, article PDF upload, several files at once, or
-   typing into an empty table).
+2. Get your baseline table into the app by any of the routes below
+   (spreadsheet upload, article PDF or Word manuscript upload, several
+   files at once, or typing into an empty table).
 3. Review the table in the editable grid. Fix anything colored (see
    *The data grid* below), then click **Apply Edits & Revalidate**.
 4. When the table validates, click **Analyze**. Each trial's p value
@@ -118,7 +118,7 @@ results (see *Validation* below).
    later session), and the reconstructed baseline table (the
    journal-style view, for comparison against the manuscript).
 
-## The five ways in
+## The six ways in
 
 **A template spreadsheet.** Download the Template (sidebar), fill it in
 (Excel `.xlsx`/`.xls` or `.csv`), and upload it. The Example download
@@ -134,9 +134,22 @@ in from the paper, or delete them), and a scanned image with no text
 layer fails cleanly with a message. Whatever was extracted can be
 reviewed, corrected, and analyzed without leaving the app.
 
+**A Word manuscript (.docx).** A submission in Word format uploads the
+same way as a PDF: the app examines every table in the document —
+submissions put them at the end, with the caption just above — picks
+the baseline table by its caption and content, and extracts it into the
+grid. Because a Word table is a real table rather than a picture of
+one, extraction is typically cleaner than from a PDF. The same
+safeguards apply: deterministic, entirely local, unusable lines
+red-flagged in the grid, and when no printed arm sizes exist the app
+looks for "(n = …)" statements in the Methods text (flagged for
+checking against the CONSORT diagram). The table must be a genuine Word
+table — a pasted image of a table has no text to read.
+
 **Several files at once — or one after another.** Any mix of
-spreadsheets and PDFs in one selection, and any number of uploads in
-sequence: **each upload appends to the table already in the grid**
+spreadsheets, PDFs, and Word manuscripts in one selection, and any
+number of uploads in sequence: **each upload appends to the table
+already in the grid**
 (including edits you have typed but not yet revalidated). Every file
 becomes rows in the combined table, distinguished by the TRIAL column; a
 file without trial identifiers gets its file name as the trial. If a new
@@ -144,16 +157,17 @@ file uses trial labels already in the table, its labels are prefixed
 with its file name so nothing silently merges. To start over, click
 **Start With an Empty Table**.
 
-**A zip archive of a whole analysis.** Zip any number of spreadsheets
-and article PDFs into one `.zip` and upload just that. This is built
+**A zip archive of a whole analysis.** Zip any number of spreadsheets,
+article PDFs, and Word manuscripts into one `.zip` and upload just
+that. This is built
 for reproducing a multi-trial investigation — the pattern of Carlisle's
 2012 review of Fujii's 168 trials
 ([PMID 22404311](https://pubmed.ncbi.nlm.nih.gov/22404311/)): put one
 file per trial in the archive and every entry becomes its own trial in
 the combined table, named after its file. Folders inside the archive
 are fine (only the file names are used); files that are not
-csv/xls/xlsx/PDF are skipped with a note, an archive inside the archive
-is not expanded, and a corrupt archive is reported rather than
+csv/xls/xlsx/PDF/docx are skipped with a note, an archive inside the
+archive is not expanded, and a corrupt archive is reported rather than
 analyzed. Limits: 300 files and 300 MB uncompressed per archive.
 
 **An empty table.** Click **Start With an Empty Table** and type the

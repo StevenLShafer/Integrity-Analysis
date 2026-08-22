@@ -71,10 +71,14 @@
     grepl("(^|[/\\\\])[.][.]([/\\\\]|$)", name)
   drop(which(hostile & take), "unsafe path in archive")
 
+  # A .docx is itself a zip container, but it is matched by EXTENSION in
+  # the allowlist below, and this nested-archive check runs first - so
+  # "docx" must never be added to this list, or Word uploads inside an
+  # archive would be refused as nested archives (issue 19).
   nested <- ext %in% c("zip", "gz", "tgz", "tar", "7z", "rar")
   drop(which(nested & take), "nested archive (not expanded)")
 
-  unsupported <- !ext %in% c("csv", "xlsx", "xls", "pdf")
+  unsupported <- !ext %in% c("csv", "xlsx", "xls", "pdf", "docx")
   drop(which(unsupported & take & !isDir & !isJunk & !hostile & !nested),
        "not a supported file type")
 
@@ -117,7 +121,8 @@ expandZipUploads <- function(files, say = outputComments) {
     plan <- plan[plan$take, , drop = FALSE]
 
     if (nrow(plan) == 0) {
-      say(paste0(zipName, " contains no usable files (csv, xls, xlsx, pdf)."))
+      say(paste0(zipName,
+                 " contains no usable files (csv, xls, xlsx, pdf, docx)."))
       next
     }
     if (nrow(plan) > .zipMaxEntries) {

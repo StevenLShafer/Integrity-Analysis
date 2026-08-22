@@ -882,6 +882,17 @@ parseBaselineTableHeuristics <- function(pdfFile,
 {
   layout    <- match.arg(layout)
   parenIsSD <- match.arg(parenIsSD)
+  # A Word manuscript takes its own route (issue 19): the parameter keeps
+  # its historical name `pdfFile` for API stability, and dispatch happens
+  # HERE - inside the exported function - so parseOne.R and every other
+  # caller need no change. `pages`, `layout`, and `ocr` have no meaning
+  # for a .docx and are ignored.
+  if (grepl("[.]docx$", pdfFile, ignore.case = TRUE))
+    return(parseBaselineTableDocx(pdfFile, trial = trial,
+                                  parenIsSD = parenIsSD,
+                                  roundObsDelta = roundObsDelta,
+                                  maxCandidates = maxCandidates,
+                                  pctApprox = pctApprox, quiet = quiet))
   if (!requireNamespace("pdftools", quietly = TRUE))
     stop("Package 'pdftools' is required: install.packages('pdftools')")
   say <- function(...) if (!quiet) message(...)

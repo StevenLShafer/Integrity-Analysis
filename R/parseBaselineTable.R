@@ -165,6 +165,14 @@ parseBaselineTable <- function(pdfFile,
   parenIsSD <- match.arg(parenIsSD)
   say <- function(...) if (!quiet) message(...)
 
+  # The AI fallback renders PDF pages (parseBaselineTableAI), which a
+  # .docx does not have. Fail clearly up front rather than obscurely
+  # later; the deployed app always passes ai = "never", so this guard
+  # only ever fires for console users (issue 19).
+  if (grepl("[.]docx$", pdfFile, ignore.case = TRUE) && ai != "never")
+    stop("The AI fallback is not available for .docx input - it reads ",
+         "rendered PDF pages. Call with ai = \"never\".")
+
   # ---- AI-only path -------------------------------------------------------
   if (ai == "always")
     return(parseBaselineTableAI(pdfFile, trial = trial, pages = pages,

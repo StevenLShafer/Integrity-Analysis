@@ -138,6 +138,32 @@ Cell shapes recognised (`tokenize.R`):
 and `63.0` has 1. That distinction is data — it tells the Monte Carlo analysis how much of a
 discrepancy rounding alone can explain.
 
+### 05a — Word manuscripts (.docx, issue 19, 2026-08-21)
+
+A `.docx` submission enters through `parseBaselineTableHeuristics()` like any file (the
+`pdfFile` parameter name is historical; dispatch is by extension) and lands in
+`R/parseDocx.R`. A Word table is already a grid of cells — `officer::docx_summary()` returns
+the body in document order — so the docx path **fabricates the word-coordinate `lines`
+structure and feeds `.ppParseBlock()` verbatim**: column *c*'s words sit at
+`x = (c−1) × pitch`, with the pitch computed from the widest cell so `.ppClusterColumns()`
+always sees each Word column as one cluster. Every cell rule above comes for free.
+
+What differs from a PDF: captions pair exactly (the nearest preceding paragraphs, scored by
+`.ppCaptionScore()` — caption-above-table is the engine's native orientation, and submissions
+put tables at the end, which doesn't matter because every table in the document is a
+candidate); footnotes are the paragraphs after the table, appended as synthetic lines so the
+`stopPattern`/footnote machinery runs unchanged; arm-N recovery reads the paragraphs
+(armNRecovery.R is pure text); no glyph repair is needed (officer returns real Unicode);
+`pages` in the result is the table's ordinal, `layout` is `"docx"`, `engine` is
+`"heuristic-docx"`. The AI fallback is refused for docx input (it renders PDF pages).
+
+Officer quirks measured and handled: `doc_index` is unique per **cell**, and `row_id` runs on
+across tables — tables are reassembled by `doc_index` continuity and rebased per table.
+Punted: "Table 1 continued" split into a second Word table is not stitched; vertically merged
+cells keep their text in the first row only. Security: a docx (zip + XML via libxml2) parses
+as data and cannot execute, but crafted XML can stall its parser — the app routes docx through
+`parseBaselineTableFiles()`'s subprocess-and-timeout exactly like a PDF.
+
 ### 05b — Submitted manuscripts (2026-08-20)
 
 The deployed app screens **submissions, not published articles**, and submissions defeat

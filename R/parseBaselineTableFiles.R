@@ -13,18 +13,21 @@
 # produce the validation figures quoted in README.md.                      #
 ############################################################################
 
-#' Parse every PDF in a directory
+#' Parse every PDF and Word manuscript in a directory
 #'
-#' Runs [parseBaselineTable()] over many PDFs and returns one row per file
-#' describing what happened, with the parsed table itself kept in a list
-#' column.
+#' Runs [parseBaselineTable()] over many PDFs and `.docx` manuscripts and
+#' returns one row per file describing what happened, with the parsed
+#' table itself kept in a list column.
 #'
-#' Each PDF is parsed in a **separate R process** with a timeout. That is not
+#' Each file is parsed in a **separate R process** with a timeout. That is not
 #' defensive programming for its own sake: a malformed PDF can hang poppler
 #' indefinitely, and because the hang is inside C code, `setTimeLimit()` and
 #' `tryCatch()` cannot end it. A file that hangs or crashes is recorded with
 #' `ok = FALSE` and the run carries on. The cost is a process launch per file,
-#' roughly half a second.
+#' roughly half a second. A `.docx` (a zip of XML read through officer /
+#' libxml2) cannot execute anything, but crafted XML can stall or exhaust
+#' its parser - the same subprocess-and-timeout containment covers it, which
+#' is why the app routes Word uploads through here too (issue 19).
 #'
 #' `ai` defaults to `"never"` here, unlike in [parseBaselineTable()]. A
 #' directory can hold thousands of articles, and each fallback is a billable
@@ -32,8 +35,8 @@
 #' pass `ai = "fallback"`, the number of files that will be sent is reported
 #' before any call is made.
 #'
-#' @param files A directory (every `.pdf` under it is parsed, recursively) or
-#'   a character vector of PDF paths.
+#' @param files A directory (every `.pdf` and `.docx` under it is parsed,
+#'   recursively) or a character vector of PDF / .docx paths.
 #' @param outputDir If given, each successful parse is also written there as
 #'   `<file>.xlsx` by [writeIntegrityTemplate()]. Created if missing.
 #' @param timeout Seconds allowed per file before its process is killed.
@@ -69,10 +72,10 @@ parseBaselineTableFiles <- function(files,
   say <- function(...) if (!quiet) message(...)
 
   if (length(files) == 1 && dir.exists(files))
-    files <- list.files(files, pattern = "[.]pdf$", full.names = TRUE,
+    files <- list.files(files, pattern = "[.](pdf|docx)$", full.names = TRUE,
                         recursive = TRUE, ignore.case = TRUE)
   files <- files[nzchar(files)]
-  if (length(files) == 0) stop("No PDF files to parse.")
+  if (length(files) == 0) stop("No PDF or Word files to parse.")
   if (!is.null(outputDir) && !dir.exists(outputDir))
     dir.create(outputDir, recursive = TRUE)
 

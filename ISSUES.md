@@ -502,6 +502,60 @@ sensitivity.
 
 ---
 
+## 19. Word .docx manuscripts as input (IMPLEMENTED 2026-08-21)
+
+Steve's request (2026-08-21): parse a manuscript in Word format by the
+same rules as the PDF engine, allowing for the submission convention -
+tables at the end of the file, captions probably (not necessarily)
+before each table.
+
+As built (R/parseDocx.R): a Word table is already a grid of cells, so
+the docx path fabricates the word-coordinate `lines` structure and
+feeds the PDF engine's `.ppParseBlock()` VERBATIM - zero changes to the
+most heavily test-pinned code in the package - which buys every cell
+rule for free (mean ± SD, footnote-driven "a (b)" disambiguation,
+n (%) complements, percent conversion, SD-vs-SE, arm-N recovery from
+the Methods text). Column c's words sit at x = (c-1) x pitch, pitch
+computed from the widest cell so .ppClusterColumns() always sees each
+Word column as one cluster (pinned by test). Every table in the
+document is a candidate scored by the same caption-preference rules as
+the PDF path, so end-of-manuscript placement does not matter - and
+caption-above-table is the engine's NATIVE orientation, so the
+submission convention costs nothing. `pages` in the result is the
+table's ordinal (docx has no pages); `engine` is "heuristic-docx".
+
+Decisions worth remembering:
+
+- **Dispatch is by extension inside parseBaselineTableHeuristics()**,
+  keeping the exported API (and the historical `pdfFile` name) stable -
+  so inst/scripts/parseOne.R needed NO change, eliminating the
+  inst/-desync failure mode PR #10 hit.
+- **docx goes through the subprocess batcher** like a PDF: a .docx (zip
+  of XML via officer/libxml2) parses as data and cannot execute, but
+  the threat model says the manuscript author is the adversary, and
+  crafted XML can stall or exhaust the parser; the per-file OS timeout
+  contains that for free.
+- **The AI fallback is refused for docx** (it renders PDF pages); the
+  deployed app always runs ai = "never" anyway.
+- **officer quirks, measured on fixtures**: docx_summary()'s doc_index
+  is unique per CELL, and row_id runs on across tables - tables are
+  reassembled by doc_index continuity and rebased. Do not "simplify"
+  the grouping back to doc_index equality.
+- Punted (documented in the architecture map): "Table 1 continued"
+  split into a second Word table is not stitched; vertically merged
+  cells keep their text in the first row only; a pasted IMAGE of a
+  table has no text to read and fails with a message.
+
+Validation: tests/testthat/test-parse-docx.R over synthetic officer
+fixtures (helper-syntheticDocx.R) - submission format end to end,
+footnote disambiguation, p-column drop, no-caption table, decoy results
+table out-scored, arm-N recovery with CONSORT review flag, ragged
+cells, adapter cluster pinning, the subprocess path, the app-level
+upload, and the zip allowlist. The median-through-docx test activates
+automatically once issue 18's engine change merges.
+
+---
+
 ## Closed
 
 ### 2. Point https://integrityanalysis.io at the app (closed 2026-08-19)
