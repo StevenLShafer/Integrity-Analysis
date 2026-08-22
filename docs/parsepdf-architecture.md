@@ -130,7 +130,7 @@ Cell shapes recognised (`tokenize.R`):
 | `numParen` | `45.3 (12.1)` | mean (SD) **or** n (%) — disambiguated from footnotes and labels |
 | `nPct` | `15 (60%)` | binary category |
 | `fraction` | `15/10`, `12/8/5` | k-way category |
-| `medianRng` | `127 [98–160]` | **skipped** — the method needs a mean and an SD |
+| `medianRng` | `127 [98–160]`, `127 [98, 160]` | median with Q1/Q3 **when the row label, caption, or footnote says the interval is an IQR** (issue 18; the app's metalog null accepts median/Q1/Q3 since issue 12); a stated range, or an unlabeled interval, is **skipped** — an IQR and a range both straddle the median, so only the text can tell them apart, and a fraud screen must not guess |
 | `pctOnly` | `60%` | **skipped** — no count |
 | `plain` | `45.3` | count under a category header, or an arm N |
 
@@ -352,9 +352,9 @@ resubmitted without translation. Two details to preserve when building the API:
   `server.R` would read as a category (its test is "integer-valued with at
   least one NA").
 - `$skipped` names each row that could not be used **and why** ("median
-  \[range\] - integrity analysis needs mean and SD"). That is what tells the
-  editor where to look, and it is more useful to return than a count of
-  failures.
+  \[range\] - the analysis needs quartiles (Q1/Q3), not the range"). That is
+  what tells the editor where to look, and it is more useful to return than a
+  count of failures.
 
 ## Where money is spent
 

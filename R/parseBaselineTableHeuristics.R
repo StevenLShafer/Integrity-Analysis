@@ -485,7 +485,80 @@
     if (is.na(mainType)) next
 
     if (mainType == "medianRng") {
-      addSkip(label, "median [range/IQR] - integrity analysis needs mean and SD", txt)
+      # ---- Median with a bracketed interval (issue 18) --------------------
+      # The app has accepted median/Q1/Q3 rows since issue 12 (metalog
+      # null), so a "median [IQR]" row is DATA now, not a skip - the old
+      # unconditional skip here predated that. But the interval's meaning
+      # comes from the TEXT, never from the numbers: an IQR and a min-max
+      # range both straddle the median, so they are numerically
+      # indistinguishable, and feeding a range into the quartile-matched
+      # metalog would be a correctness bug in a fraud-screening verdict.
+      # Evidence is tiered: the row's own label outranks the table-level
+      # text (caption + footnote), because one table can print IQR rows
+      # and range rows side by side; ambiguity at both tiers skips.
+      iqrPat <- "(?i)\\biqr\\b|inter-?quartile|quartile|\\bq1\\b|25th"
+      rngPat <- paste0("(?i)\\brange\\b|min(imum)?\\s*[-–—]\\s*max",
+                       "|\\bmin\\b\\s*[,/]?\\s*\\bmax\\b")
+      # "interquartile RANGE" is an IQR statement, not a range statement -
+      # remove the IQR phrases before testing for "range", or the common
+      # footnote "median [interquartile range]" reads as both and skips
+      dropIQR <- function(x) gsub("(?i)inter-?\\s?quartile\\s+range", "",
+                                  x, perl = TRUE)
+      capTxt <- if (capIdx >= 1) lineTexts[capIdx] else ""
+      docTxt <- paste(c(capTxt, footnoteInfo), collapse = " ")
+      rowIQR <- grepl(iqrPat, rawLabel, perl = TRUE)
+      rowRng <- grepl(rngPat, dropIQR(rawLabel), perl = TRUE)
+      docIQR <- grepl(iqrPat, docTxt, perl = TRUE)
+      docRng <- grepl(rngPat, dropIQR(docTxt), perl = TRUE)
+      verdict <- if (rowIQR && !rowRng)      "iqr"
+                 else if (rowRng && !rowIQR) "range"
+                 else if (rowIQR && rowRng)  "ambiguous"
+                 else if (docIQR && !docRng) "iqr"
+                 else if (docRng && !docIQR) "range"
+                 else                        "ambiguous"
+      if (verdict == "range") {
+        addSkip(label, paste("median [range] - the analysis needs quartiles",
+                             "(Q1/Q3), not the range"), txt)
+        next
+      }
+      if (verdict == "ambiguous") {
+        addSkip(label, paste("median with an unlabeled interval - if it is",
+                             "an IQR, enter median/Q1/Q3 by hand"), txt)
+        next
+      }
+      # verdict "iqr": emit median as MEAN plus Q1/Q3 (validateData()
+      # reinterprets MEAN as the median when Q1/Q3 are filled). A cell
+      # whose median falls outside its own interval is misread or
+      # misprinted - refuse the row rather than emit it.
+      bad <- vapply(armTok, function(t)
+        !is.null(t) && t$type == "medianRng" && !is.na(t$num3) &&
+          (t$num2 > t$num1 || t$num3 < t$num1), logical(1))
+      if (any(bad)) {
+        addSkip(label, "median outside its own [Q1, Q3] - check the cells",
+                txt)
+        next
+      }
+      # the tag itself often survives label cleaning ("Stay, median (IQR)"
+      # loses only "(IQR)" to .ppCleanLabel) - strip the leftover
+      medLabel <- .ppSquish(sub("(?i)[,;]?\\s*median\\s*([\\[(][^\\])]*[\\])])?\\s*$",
+                                "", label, perl = TRUE))
+      rowName <- .ppUniqueName(if (nchar(medLabel) > 0) medLabel
+                               else if (nchar(label) > 0) label else "Unnamed",
+                               usedRowNames)
+      usedRowNames <- c(usedRowNames, rowName)
+      catHeader <- NA_character_
+      catHeaderPct <- FALSE
+      perArm <- lapply(seq_len(nArms), function(j) {
+        t <- armTok[[j]]
+        if (is.null(t) || t$type != "medianRng" || is.na(t$num3)) return(NULL)
+        list(N = armN[arms[j]], MEAN = t$num1, Q1 = t$num2, Q3 = t$num3,
+             SD = NA_real_, SE = NA_real_,
+             ROUND_MEAN = t$dec1,
+             ROUND_DISPERSION = NA_integer_,
+             ROUND_OBSERVATION = t$dec1 + roundObsDelta)
+      })
+      outRows[[length(outRows) + 1]] <-
+        list(row = rowName, type = "median", perArm = perArm)
       next
     }
     # ---- Percent-block conversion (2026-08-21) ----------------------------
@@ -729,7 +802,14 @@
   if (length(outRows) == 0) return(NULL)
 
   # ---- Assemble the template-format data frame ----------------------------
-  allCols <- c(.ppBaseColumns(), catColumns)
+  # Q1/Q3 appear only when a median row was actually emitted (issue 18):
+  # they are not part of the .ppBaseColumns() contract, and adding two
+  # always-empty columns to every parse would clutter the app grid - the
+  # AI path (.ppAiToTemplate) and the hybrid merge index by
+  # .ppBaseColumns() and tolerate extras, but not missing base columns.
+  anyMedian <- any(vapply(outRows, function(r)
+    identical(r$type, "median"), logical(1)))
+  allCols <- c(.ppBaseColumns(), if (anyMedian) c("Q1", "Q3"), catColumns)
   rows <- list()
   for (r in outRows) {
     for (j in seq_len(nArms)) {

@@ -502,6 +502,48 @@ sensitivity.
 
 ---
 
+## 18. Parse engine emits median [Q1, Q3] (IMPLEMENTED 2026-08-21)
+
+Steve's decision (2026-08-21, while scoping the docx work): the engine's
+unconditional skip of `medianRng` cells ("integrity analysis needs mean
+and SD") predated issue 12 - the app has accepted median/Q1/Q3 rows
+since then (metalog null) - so the skip was stale, and median support
+belongs in the shared parse engine now rather than as a future issue.
+
+As built (R/tokenize.R + R/parseBaselineTableHeuristics.R):
+
+- The `medianRng` token gained the comma/semicolon separator ("127
+  [98, 160]" - the printed IQR form, which the dash-only pattern never
+  matched) and now carries its THIRD number (`num3`/`dec3`; extraction
+  is structured via `.ppMedianParts`, because a bare number grep read
+  the separator dash of "127 [98-160]" as a minus sign).
+- **Emission is gated on text, never numbers**: an IQR and a min-max
+  range both straddle the median, so they are numerically
+  indistinguishable, and feeding a range into the quartile-matched
+  metalog would be a correctness bug in a fraud-screening verdict. The
+  row's own label outranks the caption/footnote (one table can print
+  IQR and range rows side by side); "interquartile range" is recognized
+  as an IQR statement, not a range statement. Verdicts: IQR stated ->
+  emit MEAN(=median)/Q1/Q3 (SD/SE empty, ROUND_MEAN from the printed
+  median); range stated -> skip "the analysis needs quartiles (Q1/Q3),
+  not the range"; nothing stated -> skip "median with an unlabeled
+  interval - if it is an IQR, enter median/Q1/Q3 by hand". A median
+  outside its own interval also refuses.
+- Q1/Q3 columns appear in the output only when a median row was
+  actually emitted - `.ppBaseColumns()` is unchanged, because the AI
+  path and the hybrid merge index by it and adding two always-empty
+  columns would clutter every parse.
+
+The wide-spreadsheet parser (issue 17) applies the same gate on its own
+cells; the docx parser (issue 19) inherits this engine change for free.
+Validation: tests/testthat/test-parse-median.R (all three gate
+verdicts, both separators, label-beats-footnote, end-to-end
+validateData acceptance); the existing median [range] fixtures in
+test-parse-synthetic.R and test-app-pipeline.R still skip, now with the
+quartile-focused reason.
+
+---
+
 ## Closed
 
 ### 2. Point https://integrityanalysis.io at the app (closed 2026-08-19)
