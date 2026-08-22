@@ -128,11 +128,16 @@ your data* below.
 **An article PDF.** Upload the article; the app finds the baseline
 table ("Table 1") in the text layer and extracts it into the grid. The
 extraction is deterministic — the same PDF always yields the same table
-— and entirely local. Extraction is imperfect by nature: table lines the
-reader could not use appear as red-flagged rows in the grid (fill them
-in from the paper, or delete them), and a scanned image with no text
-layer fails cleanly with a message. Whatever was extracted can be
-reviewed, corrected, and analyzed without leaving the app.
+— and entirely local. Median rows are extracted too, **when the table
+says the bracketed interval is an IQR** (in the row label, caption, or
+footnote); a median with a min–max range, or with an unlabeled
+interval, is flagged for hand entry instead — the analysis needs
+quartiles, and the app will not guess. Extraction is imperfect by
+nature: table lines the reader could not use appear as red-flagged rows
+in the grid (fill them in from the paper, or delete them), and a
+scanned image with no text layer fails cleanly with a message. Whatever
+was extracted can be reviewed, corrected, and analyzed without leaving
+the app.
 
 **Several files at once — or one after another.** Any mix of
 spreadsheets and PDFs in one selection, and any number of uploads in
